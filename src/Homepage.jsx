@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Car, Users, Fuel, Search, User, LogOut, X } from 'lucide-react';
-import { account } from './appwrite/config';
+import { account, databases } from './appwrite/config';
+import { getFilePreview } from './appwrite/fileManager';
 import Login from './components/Login';
 import Register from './components/Register';
 import Account from './components/Account';
@@ -17,12 +18,12 @@ const HomePage = () => {
   const [filteredVehicles, setFilteredVehicles] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [filters, setFilters] = useState({
+  const [selectedVehicle, setSelectedVehicle] = useState(null);  const [filters, setFilters] = useState({
     make: '',
     type: '',
     gasType: '',
     seatingCapacity: '',
+    available: 'true', // Default to show only available vehicles
     pickupDate: '',
     returnDate: ''
   });
@@ -99,11 +100,9 @@ const HomePage = () => {
       returnDate: '2025-07-20',
       status: 'pending'
     }
-  ];
-  // Initialize data
+  ];  // Initialize data
   useEffect(() => {
-    setVehicles(mockVehicles);
-    setFilteredVehicles(mockVehicles);
+    loadVehiclesFromDatabase();
     
     // Check real authentication status
     const checkAuth = async () => {
@@ -123,6 +122,39 @@ const HomePage = () => {
     checkAuth();
   }, []);
 
+  // Load vehicles from database
+  const loadVehiclesFromDatabase = async () => {
+    try {
+      const response = await databases.listDocuments(
+        'cargo-car-rental',
+        'vehicles'
+      );      // Transform database documents to match expected format
+      const dbVehicles = response.documents.map(doc => ({
+        id: doc.$id,
+        make: doc.make,
+        model: doc.model,
+        type: doc.type,
+        gasType: doc.gasType,
+        seatingCapacity: doc.seatingCapacity,
+        pricePerDay: doc.pricePerDay,
+        imageUrl: doc.imageFileId ? getFilePreview(doc.imageFileId, 400, 250) : 
+                 (doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop'),
+        imageFileId: doc.imageFileId,
+        available: doc.available !== false // Handle both true/false and undefined
+      }));
+      
+      setVehicles(dbVehicles);
+      
+      // Apply initial filter to show only available vehicles
+      const availableVehicles = dbVehicles.filter(vehicle => vehicle.available);
+      setFilteredVehicles(availableVehicles);
+    } catch (error) {
+      console.error('Error loading vehicles from database:', error);
+      // Fallback to mock data if database fails
+      setVehicles(mockVehicles);
+      setFilteredVehicles(mockVehicles);
+    }
+  };
   // Filter vehicles
   const applyFilters = () => {
     let filtered = vehicles;
@@ -139,9 +171,13 @@ const HomePage = () => {
     if (filters.seatingCapacity) {
       filtered = filtered.filter(v => v.seatingCapacity === parseInt(filters.seatingCapacity));
     }
+    if (filters.available !== '') {
+      const isAvailable = filters.available === 'true';
+      filtered = filtered.filter(v => v.available === isAvailable);
+    }
 
     setFilteredVehicles(filtered);
-  };  // Handle booking
+  };// Handle booking
   const handleBookVehicle = (vehicle) => {
     if (!isLoggedIn) {
       showLoginModal();
@@ -369,8 +405,7 @@ const HomePage = () => {
             <option value="Petrol">Petrol</option>
             <option value="Diesel">Diesel</option>
           </select>
-        </div>
-        <div>
+        </div>        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Seating Capacity</label>
           <select 
             value={filters.seatingCapacity}
@@ -381,6 +416,18 @@ const HomePage = () => {
             <option value="4">4</option>
             <option value="5">5</option>
             <option value="7">7</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
+          <select 
+            value={filters.available}
+            onChange={(e) => setFilters({...filters, available: e.target.value})}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Vehicles</option>
+            <option value="true">Available Only</option>
+            <option value="false">Unavailable Only</option>
           </select>
         </div>
         <div>
@@ -415,10 +462,11 @@ const HomePage = () => {
       </div>
     </div>
   );
-
   // Vehicle card component
   const VehicleCard = ({ vehicle }) => (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden transform transition duration-300 hover:scale-105 hover:shadow-xl">
+    <div className={`bg-white rounded-lg shadow-md overflow-hidden transform transition duration-300 hover:scale-105 hover:shadow-xl ${
+      !vehicle.available ? 'opacity-75' : ''
+    }`}>
       <div className="relative">
         <img 
           src={vehicle.imageUrl} 
@@ -428,6 +476,11 @@ const HomePage = () => {
         <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
           {vehicle.type}
         </div>
+        {!vehicle.available && (
+          <div className="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
+            Unavailable
+          </div>
+        )}
       </div>
       <div className="p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-2">{vehicle.make} {vehicle.model}</h3>
@@ -449,9 +502,14 @@ const HomePage = () => {
           <span className="text-2xl font-bold text-blue-600">₱{vehicle.pricePerDay.toLocaleString()}/day</span>
           <button 
             onClick={() => handleBookVehicle(vehicle)}
-            className="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 transition duration-300 font-semibold"
+            disabled={!vehicle.available}
+            className={`px-5 py-2 rounded-md transition duration-300 font-semibold ${
+              vehicle.available 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            }`}
           >
-            Book Now
+            {vehicle.available ? 'Book Now' : 'Unavailable'}
           </button>
         </div>
       </div>
