@@ -18,7 +18,61 @@ const HomePage = () => {
   const [filteredVehicles, setFilteredVehicles] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);  const [filters, setFilters] = useState({
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+
+  // Function to get direct file URL (same as admin dashboard)
+  const getDirectFileUrl = (fileId) => {
+    if (!fileId) return null;
+    return `https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${fileId}/view?project=685682ba00095008cb7d`;
+  };
+
+  // Vehicle Image Component for consistent loading
+  const VehicleImage = ({ vehicle, className = "w-full h-48 object-cover" }) => {
+    const [showPlaceholder, setShowPlaceholder] = useState(false);
+    
+    const getImageSrc = () => {
+      if (vehicle.imageFileId) {
+        return getDirectFileUrl(vehicle.imageFileId);
+      }
+      if (vehicle.imageUrl) {
+        return vehicle.imageUrl;
+      }
+      return 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop';
+    };
+
+    const imageSrc = getImageSrc();
+
+    if (showPlaceholder && !vehicle.imageUrl) {
+      return (
+        <div className={`bg-gray-300 flex items-center justify-center ${className}`}>
+          <Car className="h-8 w-8 text-gray-500" />
+        </div>
+      );
+    }
+
+    return (
+      <img 
+        src={imageSrc}
+        alt={`${vehicle.make} ${vehicle.model}`}
+        className={className}
+        onLoad={() => {
+          console.log(`✅ Homepage image loaded: ${vehicle.make} ${vehicle.model}`);
+        }}
+        onError={(e) => {
+          console.error(`❌ Homepage image failed: ${vehicle.make} ${vehicle.model}`);
+          console.error(`Failed URL: ${e.target.src}`);
+          console.error(`FileID: ${vehicle.imageFileId}`);
+          
+          // Try fallback to generic imageUrl if it's different
+          if (vehicle.imageUrl && e.target.src !== vehicle.imageUrl) {
+            e.target.src = vehicle.imageUrl;
+          } else {
+            setShowPlaceholder(true);
+          }
+        }}
+      />
+    );
+  };const [filters, setFilters] = useState({
     make: '',
     type: '',
     gasType: '',
@@ -121,14 +175,17 @@ const HomePage = () => {
     
     checkAuth();
   }, []);
-
   // Load vehicles from database
   const loadVehiclesFromDatabase = async () => {
     try {
       const response = await databases.listDocuments(
         'cargo-car-rental',
         'vehicles'
-      );      // Transform database documents to match expected format
+      );
+      
+      console.log('Homepage loaded vehicles:', response.documents);
+      
+      // Transform database documents to match expected format
       const dbVehicles = response.documents.map(doc => ({
         id: doc.$id,
         make: doc.make,
@@ -137,9 +194,8 @@ const HomePage = () => {
         gasType: doc.gasType,
         seatingCapacity: doc.seatingCapacity,
         pricePerDay: doc.pricePerDay,
-        imageUrl: doc.imageFileId ? getFilePreview(doc.imageFileId, 400, 250) : 
-                 (doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop'),
-        imageFileId: doc.imageFileId,
+        imageFileId: doc.imageFileId, // Keep the file ID for direct access
+        imageUrl: doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop', // Fallback URL
         available: doc.available !== false // Handle both true/false and undefined
       }));
       
@@ -461,18 +517,13 @@ const HomePage = () => {
         </button>
       </div>
     </div>
-  );
-  // Vehicle card component
+  );  // Vehicle card component
   const VehicleCard = ({ vehicle }) => (
     <div className={`bg-white rounded-lg shadow-md overflow-hidden transform transition duration-300 hover:scale-105 hover:shadow-xl ${
       !vehicle.available ? 'opacity-75' : ''
     }`}>
       <div className="relative">
-        <img 
-          src={vehicle.imageUrl} 
-          alt={`${vehicle.make} ${vehicle.model}`} 
-          className="w-full h-48 object-cover"
-        />
+        <VehicleImage vehicle={vehicle} className="w-full h-48 object-cover" />
         <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
           {vehicle.type}
         </div>

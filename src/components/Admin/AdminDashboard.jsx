@@ -11,7 +11,60 @@ const AdminDashboard = () => {
   const [editingVehicle, setEditingVehicle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [uploadingImage, setUploadingImage] = useState(false);  const [vehicleForm, setVehicleForm] = useState({
+  const [uploadingImage, setUploadingImage] = useState(false);
+  // Simple function to get direct file URL
+  const getDirectFileUrl = (fileId) => {
+    if (!fileId) return null;
+    return `https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${fileId}/view?project=685682ba00095008cb7d`;
+  };
+
+  // Simplified Vehicle Image Component
+  const VehicleImage = ({ vehicle }) => {
+    const [showPlaceholder, setShowPlaceholder] = useState(false);
+    
+    // Determine image source priority
+    const getImageSrc = () => {
+      if (vehicle.imageFileId) {
+        return getDirectFileUrl(vehicle.imageFileId);
+      }
+      if (vehicle.imageUrl) {
+        return vehicle.imageUrl;
+      }
+      return null;
+    };
+
+    const imageSrc = getImageSrc();
+
+    if (showPlaceholder || !imageSrc) {
+      return (
+        <div className="w-full h-32 bg-gray-300 rounded-lg flex items-center justify-center">
+          <Car className="h-8 w-8 text-gray-500" />
+          <div className="ml-2 text-sm text-gray-600">
+            {vehicle.imageFileId ? 'Image Failed' : 'No Image'}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <img 
+        src={imageSrc}
+        alt={`${vehicle.make} ${vehicle.model}`}
+        className="w-full h-32 object-cover rounded-lg"
+        onLoad={() => {
+          console.log(`✅ Image loaded: ${vehicle.make} ${vehicle.model}`);
+          console.log(`Source: ${imageSrc}`);
+        }}
+        onError={(e) => {
+          console.error(`❌ Image failed: ${vehicle.make} ${vehicle.model}`);
+          console.error(`Failed URL: ${e.target.src}`);
+          console.error(`FileID: ${vehicle.imageFileId}`);
+          console.error(`ImageURL: ${vehicle.imageUrl}`);
+          setShowPlaceholder(true);
+        }}
+      />
+    );
+  };const [vehicleForm, setVehicleForm] = useState({
     make: '',
     model: '',
     type: 'Sedan',
@@ -35,7 +88,6 @@ const AdminDashboard = () => {
   useEffect(() => {
     loadVehicles();
   }, []);
-
   const loadVehicles = async () => {
     try {
       setLoading(true);
@@ -43,6 +95,7 @@ const AdminDashboard = () => {
         'cargo-car-rental',
         'vehicles'
       );
+      console.log('Loaded vehicles:', response.documents);
       setVehicles(response.documents);
     } catch (error) {
       console.error('Error loading vehicles:', error);
@@ -81,8 +134,7 @@ const AdminDashboard = () => {
     setLoading(true);
     setError('');
 
-    try {
-      // Prepare base vehicle data
+    try {      // Prepare base vehicle data with all fields
       const baseVehicleData = {
         make: vehicleForm.make,
         model: vehicleForm.model,
@@ -92,6 +144,8 @@ const AdminDashboard = () => {
         pricePerDay: vehicleForm.pricePerDay,
         imageFileId: vehicleForm.imageFileId || '',
         imageFileName: vehicleForm.imageFileName || '',
+        imageUrl: vehicleForm.imageUrl || '', // Now included since attribute exists
+        description: vehicleForm.description || '', // Include description too
         available: vehicleForm.available
       };
 
@@ -118,13 +172,14 @@ const AdminDashboard = () => {
           createdAt: currentTime,
           updatedAt: currentTime
         };
-        
-        await databases.createDocument(
+          await databases.createDocument(
           'cargo-car-rental',
           'vehicles',
           ID.unique(),
           vehicleData
         );
+        
+        console.log('Saved vehicle data:', vehicleData);
       }
 
       await loadVehicles();
@@ -172,8 +227,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
-  const handleImageUpload = async (e) => {
+  };  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -194,7 +248,9 @@ const AdminDashboard = () => {
       setError('');
 
       // Create organized filename for vehicle image
-      const organizedFileName = `vehicle-${vehicleForm.make}-${vehicleForm.model}-${Date.now()}`;
+      const organizedFileName = `vehicle-${vehicleForm.make || 'unknown'}-${vehicleForm.model || 'model'}-${Date.now()}`;
+      
+      console.log('Uploading with filename:', organizedFileName);
       
       // Upload using your existing file manager with vehicle category
       const result = await uploadFile(file, 'vehicle_image', organizedFileName);
@@ -203,6 +259,11 @@ const AdminDashboard = () => {
         // Get file preview URL using your existing function
         const imageUrl = getFilePreview(result.fileId, 400, 250);
         
+        console.log('Upload successful!');
+        console.log('File ID:', result.fileId);
+        console.log('Preview URL:', imageUrl);
+        console.log('Organized filename:', organizedFileName);
+        
         setVehicleForm(prev => ({
           ...prev,
           imageUrl: imageUrl,
@@ -210,6 +271,7 @@ const AdminDashboard = () => {
           imageFileName: organizedFileName
         }));
       } else {
+        console.error('Upload failed:', result.error);
         setError('Failed to upload image: ' + result.error);
       }
 
@@ -395,37 +457,7 @@ const AdminDashboard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {vehicles.map((vehicle) => (
                       <div key={vehicle.$id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">                        <div className="relative mb-4">
-                          {vehicle.imageFileId ? (
-                            <img 
-                              src={getFilePreview(vehicle.imageFileId, 300, 200)}
-                              alt={`${vehicle.make} ${vehicle.model}`}
-                              className="w-full h-32 object-cover rounded-lg"
-                              onError={(e) => {
-                                // Fallback to imageUrl if file preview fails
-                                if (vehicle.imageUrl) {
-                                  e.target.src = vehicle.imageUrl;
-                                } else {
-                                  e.target.style.display = 'none';
-                                  e.target.nextElementSibling.style.display = 'flex';
-                                }
-                              }}
-                            />
-                          ) : vehicle.imageUrl ? (
-                            <img 
-                              src={vehicle.imageUrl} 
-                              alt={`${vehicle.make} ${vehicle.model}`}
-                              className="w-full h-32 object-cover rounded-lg"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextElementSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          
-                          {/* Fallback placeholder */}
-                          <div className="w-full h-32 bg-gray-300 rounded-lg flex items-center justify-center" style={{display: (vehicle.imageFileId || vehicle.imageUrl) ? 'none' : 'flex'}}>
-                            <Car className="h-8 w-8 text-gray-500" />
-                          </div>
+                          <VehicleImage vehicle={vehicle} />
                           
                           <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${
                             vehicle.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -715,15 +747,17 @@ const AdminDashboard = () => {
                         Organized as: {vehicleForm.imageFileName}
                       </p>
                     )}
-                  </div>
-                  {(vehicleForm.imageFileId || vehicleForm.imageUrl) && (
+                  </div>                  {(vehicleForm.imageFileId || vehicleForm.imageUrl) && (
                     <div className="flex-shrink-0">
                       <img 
-                        src={vehicleForm.imageFileId ? getFilePreview(vehicleForm.imageFileId, 100, 80) : vehicleForm.imageUrl}
+                        src={vehicleForm.imageFileId ? 
+                          storage.getFileView('cargo-files', vehicleForm.imageFileId).href : 
+                          vehicleForm.imageUrl
+                        }
                         alt="Vehicle Preview"
                         className="h-16 w-16 object-cover rounded-md border"
                         onError={(e) => {
-                          // Try fallback to imageUrl if file preview fails
+                          // Try fallback to imageUrl if file view fails
                           if (vehicleForm.imageFileId && vehicleForm.imageUrl && e.target.src !== vehicleForm.imageUrl) {
                             e.target.src = vehicleForm.imageUrl;
                           } else {
