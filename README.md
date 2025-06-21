@@ -1,14 +1,13 @@
-# React starter kit with Appwrite
+# Raymart Appwrite Project
 
-Kickstart your React development with this ready-to-use starter project integrated with [Appwrite](https://www.appwrite.io)
+A React application integrated with [Appwrite](https://www.appwrite.io)
 
 ## 🚀Getting started
 
-###
-Clone the Project
-Clone this repository to your local machine using Git:
+### Project Setup
+This project was created based on the Appwrite React starter template.
 
-`git clone https://github.com/appwrite/starter-for-react`
+Original template: `https://github.com/appwrite/starter-for-react`
 
 ## 🛠️ Development guid
 1. **Configure Appwrite**<br/>
