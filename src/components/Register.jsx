@@ -6,8 +6,13 @@ import { UserPlus, Eye, EyeOff, X } from 'lucide-react';
 import { ID } from 'appwrite';
 
 const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
     email: '',
+    phoneNumber: '',
+    addressLine: '',
+    city: '',
     password: '',
     confirmPassword: ''
   });
@@ -83,14 +88,13 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
       } catch (error) {
         // No existing session, continue
         console.log('No existing session found, proceeding...');
-      }
-
-      // Step 2: Create user account
+      }      // Step 2: Create user account
+      const fullName = `${formData.firstName} ${formData.middleName ? formData.middleName + ' ' : ''}${formData.lastName}`.trim();
       const user = await account.create(
         ID.unique(),
         formData.email,
         formData.password,
-        formData.name
+        fullName
       );
 
       // Step 3: Login the user with new credentials
@@ -119,11 +123,18 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
         console.log('File uploaded successfully:', uploadResult);
       }// Step 4: Get user data and add ID file reference
       const userData = await account.get();
-      
-      // Store file information in user preferences
+        // Store file information in user preferences
       if (uploadResult && uploadResult.success) {
         try {
           await account.updatePrefs({
+            // Personal Information
+            firstName: formData.firstName,
+            middleName: formData.middleName,
+            lastName: formData.lastName,
+            phoneNumber: formData.phoneNumber,
+            addressLine: formData.addressLine,
+            city: formData.city,
+            // ID Verification Information
             idFileId: uploadResult.fileId,
             idFileName: uploadResult.fileName,
             idOriginalName: uploadResult.originalName,
@@ -133,9 +144,9 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
             idUploadDate: new Date().toISOString(),
             fileCategory: uploadResult.category
           });
-          console.log('User preferences updated with ID file info');
+          console.log('User preferences updated with personal info and ID file info');
         } catch (prefsError) {
-          console.error('Failed to save ID reference:', prefsError);
+          console.error('Failed to save user data:', prefsError);
         }
       }
 
@@ -145,11 +156,9 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
     } finally {
       setLoading(false);
     }
-  };
-
-  return (
+  };  return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md relative">
+      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg relative max-h-[90vh] overflow-y-auto scrollbar-hide" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
@@ -165,27 +174,55 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             {error}
           </div>
-        )}
+        )}        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                First Name *
+              </label>
+              <input
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="First name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Last Name *
+              </label>
+              <input
+                type="text"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Last name"
+                required
+              />
+            </div>
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name
+              Middle Name
             </label>
             <input
               type="text"
-              name="name"
-              value={formData.name}
+              name="middleName"
+              value={formData.middleName}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter your full name"
-              required
+              placeholder="Middle name (optional)"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
+              Email Address *
             </label>
             <input
               type="email"
@@ -194,6 +231,51 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Enter your email"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number *
+            </label>
+            <input
+              type="tel"
+              name="phoneNumber"
+              value={formData.phoneNumber}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your phone number"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address Line *
+            </label>
+            <input
+              type="text"
+              name="addressLine"
+              value={formData.addressLine}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Street address, building, unit"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              City *
+            </label>
+            <input
+              type="text"
+              name="city"
+              value={formData.city}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your city"
               required
             />
           </div>
@@ -262,20 +344,19 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf"
                 onChange={handleFileChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 required
               />
               <p className="mt-1 text-xs text-gray-500">
                 Upload a clear photo of your government ID (Driver's License, Passport, etc.). Accepted formats: JPEG, PNG, PDF (Max 5MB)
               </p>
-              
-              {idPreview && (
+                {idPreview && (
                 <div className="mt-3">
                   <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
                   <img 
                     src={idPreview} 
                     alt="ID Preview" 
-                    className="w-full max-w-xs h-32 object-cover rounded-md border border-gray-300"
+                    className="w-full max-w-[200px] h-24 object-cover rounded-md border border-gray-300"
                   />
                 </div>
               )}

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { account } from '../appwrite/config';
 import { LogIn, Eye, EyeOff, X } from 'lucide-react';
+import AdminDashboard from './Admin/AdminDashboard';
 
-const Login = ({ onLogin, switchToRegister, onClose }) => {
+const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -10,17 +11,38 @@ const Login = ({ onLogin, switchToRegister, onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
-  };
-  const handleSubmit = async (e) => {
+  };  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError('');    // Check for admin credentials
+    if (formData.email === 'admin@cargo.com' && formData.password === 'admin123') {
+      try {
+        // Set admin session in localStorage
+        localStorage.setItem('adminSession', 'true');
+        localStorage.setItem('adminUser', JSON.stringify({
+          email: 'admin@cargo.com',
+          name: 'Admin',
+          role: 'admin'
+        }));
+        
+        // Set admin logged in state to show dashboard
+        setIsAdminLoggedIn(true);
+        setLoading(false);
+        return;
+      } catch (error) {
+        setError('Admin login failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       const session = await account.createEmailPasswordSession(formData.email, formData.password);
@@ -30,8 +52,13 @@ const Login = ({ onLogin, switchToRegister, onClose }) => {
       setError(error.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
+    }  };
+
+  // If admin is logged in, show the Admin Dashboard
+  if (isAdminLoggedIn) {
+    return <AdminDashboard />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md relative">

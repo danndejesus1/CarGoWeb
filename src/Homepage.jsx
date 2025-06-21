@@ -3,6 +3,8 @@ import { Calendar, Car, Users, Fuel, Search, User, LogOut, X } from 'lucide-reac
 import { account } from './appwrite/config';
 import Login from './components/Login';
 import Register from './components/Register';
+import Account from './components/Account';
+import BookingModal from './components/User/BookingModal';
 import './App.css';
 
 const HomePage = () => {
@@ -147,6 +149,27 @@ const HomePage = () => {
     }
     setSelectedVehicle(vehicle);
     setShowBookingModal(true);
+  };
+
+  // Handle booking completion
+  const handleBookingComplete = (bookingResponse) => {
+    console.log('Booking completed:', bookingResponse);
+    
+    // Add to local bookings state
+    const newBooking = {
+      id: bookingResponse.$id,
+      vehicleId: selectedVehicle.id,
+      pickupDate: bookingResponse.pickupDate,
+      returnDate: bookingResponse.returnDate,
+      status: 'pending',
+      totalCost: bookingResponse.totalCost,
+      createdAt: bookingResponse.createdAt
+    };
+    
+    setBookings(prev => [newBooking, ...prev]);
+    
+    // Show success message
+    alert('Booking confirmed! You can view your booking in the Account section.');
   };
 
   // Handle contact form
@@ -509,142 +532,25 @@ const HomePage = () => {
       </div>
     </section>
   );
-
   // Account section
   const AccountSection = () => (
-    <section className="py-16 px-4 bg-white min-h-screen">
-      <div className="container mx-auto">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-10">My Account</h2>
-        <div className="max-w-4xl mx-auto">
-          {/* User profile */}
-          <div className="bg-gray-50 p-8 rounded-lg shadow-md mb-8">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-1">{user?.name}</h3>
-                <p className="text-gray-600">{user?.email}</p>
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="mt-4 md:mt-0 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition duration-300 flex items-center space-x-2"
-              >
-                <LogOut size={16} />
-                <span>Logout</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Bookings */}
-          <div className="bg-white p-8 rounded-lg shadow-md">
-            <h3 className="text-xl font-semibold text-gray-800 mb-6">My Bookings</h3>
-            <div className="space-y-4">
-              {bookings.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">You have no bookings yet.</p>
-              ) : (
-                bookings.map(booking => {
-                  const vehicle = getVehicleById(booking.vehicleId);
-                  return (
-                    <div key={booking.id} className="bg-gray-50 p-4 rounded-md border border-gray-200">
-                      <div className="flex flex-col md:flex-row justify-between items-start">
-                        <div className="flex-1">
-                          <h4 className="text-lg font-semibold">{vehicle?.make} {vehicle?.model}</h4>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
-                            <div className="flex items-center">
-                              <Calendar size={14} className="mr-1" />
-                              <span>Pickup: {booking.pickupDate}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <Calendar size={14} className="mr-1" />
-                              <span>Return: {booking.returnDate}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2 mt-2 md:mt-0">
-                          <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                            booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                          </span>
-                          {booking.status === 'pending' && (
-                            <button 
-                              onClick={() => cancelBooking(booking.id)}
-                              className="text-sm text-red-600 hover:text-red-800 px-2 py-1 border border-red-300 rounded hover:bg-red-50 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <Account 
+      user={user}
+      onLogout={handleLogout}
+      bookings={bookings}
+      getVehicleById={getVehicleById}
+      cancelBooking={cancelBooking}
+    />
   );
-
   // Booking modal
-  const BookingModal = () => (
-    showBookingModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-semibold">Book {selectedVehicle?.make} {selectedVehicle?.model}</h3>
-            <button 
-              onClick={() => setShowBookingModal(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X size={24} />
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date</label>
-              <input 
-                type="date"
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
-              <input 
-                type="date"
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="text-center p-4 bg-blue-50 rounded-md">
-              <p className="text-lg font-semibold text-blue-800">
-                ₱{selectedVehicle?.pricePerDay.toLocaleString()}/day
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              <button 
-                onClick={() => setShowBookingModal(false)}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-300"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => {
-                  alert('Booking confirmed! (This is a demo)');
-                  setShowBookingModal(false);
-                }}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300"
-              >
-                Confirm Booking
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+  const BookingModalComponent = () => (
+    <BookingModal
+      isOpen={showBookingModal}
+      onClose={() => setShowBookingModal(false)}
+      selectedVehicle={selectedVehicle}
+      user={user}
+      onBookingComplete={handleBookingComplete}
+    />
   );
 
   // Footer
@@ -674,9 +580,8 @@ const HomePage = () => {
       {activeSection === 'vehicles' && <VehiclesSection />}
       {activeSection === 'contact' && <ContactSection />}
       {activeSection === 'account' && isLoggedIn && <AccountSection />}
-      
-      <Footer />
-      <BookingModal />
+        <Footer />
+      <BookingModalComponent />
       
       {/* Authentication Modal */}
       {showAuth && (
