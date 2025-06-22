@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { databases, storage } from '../../appwrite/config';
 import { Query } from 'appwrite';
-import { Eye, Car, CheckCircle } from 'lucide-react';
+import { Eye, Car, CheckCircle, XCircle } from 'lucide-react'; // Add XCircle for cancel icon
 
 // Helper for formatting date/time
 const formatDateTime = (dateString) => {
@@ -104,6 +104,7 @@ const AdminBookings = () => {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [error, setError] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null); // Track cancelling
 
   const loadBookings = async () => {
     setLoadingBookings(true);
@@ -139,6 +140,25 @@ const AdminBookings = () => {
       setError('Failed to confirm booking: ' + (err.message || err));
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  // Cancel booking handler
+  const handleCancelBooking = async (bookingId) => {
+    setCancellingId(bookingId);
+    setError('');
+    try {
+      await databases.updateDocument(
+        'cargo-car-rental',
+        'bookings',
+        bookingId,
+        { status: 'cancelled', updatedAt: new Date().toISOString() }
+      );
+      await loadBookings();
+    } catch (err) {
+      setError('Failed to cancel booking: ' + (err.message || err));
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -218,22 +238,41 @@ const AdminBookings = () => {
                       </td>
                       <td className="px-4 py-2 border-b">
                         {booking.status === 'pending' && (
-                          <button
-                            onClick={() => handleConfirmBooking(booking.$id)}
-                            disabled={updatingId === booking.$id}
-                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded flex items-center space-x-1 disabled:opacity-50"
-                          >
-                            {updatingId === booking.$id ? (
-                              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full mr-2"></span>
-                            ) : (
-                              <CheckCircle size={16} className="mr-1" />
-                            )}
-                            <span>Confirm Booking</span>
-                          </button>
+                          <div className="flex flex-row gap-2">
+                            <button
+                              onClick={() => handleConfirmBooking(booking.$id)}
+                              disabled={updatingId === booking.$id || cancellingId === booking.$id}
+                              className="p-1 rounded hover:bg-green-100 text-green-700 disabled:opacity-50"
+                              title="Confirm Booking"
+                            >
+                              {updatingId === booking.$id ? (
+                                <span className="animate-spin h-4 w-4 border-b-2 border-green-700 rounded-full"></span>
+                              ) : (
+                                <CheckCircle size={20} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleCancelBooking(booking.$id)}
+                              disabled={cancellingId === booking.$id || updatingId === booking.$id}
+                              className="p-1 rounded hover:bg-red-100 text-red-700 disabled:opacity-50"
+                              title="Cancel Booking"
+                            >
+                              {cancellingId === booking.$id ? (
+                                <span className="animate-spin h-4 w-4 border-b-2 border-red-700 rounded-full"></span>
+                              ) : (
+                                <XCircle size={20} />
+                              )}
+                            </button>
+                          </div>
                         )}
                         {booking.status === 'confirmed' && (
                           <span className="text-green-700 font-semibold flex items-center">
                             <CheckCircle size={16} className="mr-1" /> Confirmed
+                          </span>
+                        )}
+                        {booking.status === 'cancelled' && (
+                          <span className="text-red-700 font-semibold flex items-center">
+                            <XCircle size={16} className="mr-1" /> Cancelled
                           </span>
                         )}
                       </td>

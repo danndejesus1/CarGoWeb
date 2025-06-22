@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { account } from '../appwrite/config';
 import { LogIn, Eye, EyeOff, X } from 'lucide-react';
 import AdminDashboard from './Admin/AdminDashboard';
+import StaffBookings from './Staff/StaffBookings'; // Import StaffBookings
 
 const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
   const [formData, setFormData] = useState({
@@ -12,32 +13,54 @@ const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isStaffLoggedIn, setIsStaffLoggedIn] = useState(false); // Track staff login
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
-  };  const handleSubmit = async (e) => {
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');    // Check for admin credentials
+    setError('');
+
+    // Admin login
     if (formData.email === 'admin@cargo.com' && formData.password === 'admin123') {
       try {
-        // Set admin session in localStorage
         localStorage.setItem('adminSession', 'true');
         localStorage.setItem('adminUser', JSON.stringify({
           email: 'admin@cargo.com',
           name: 'Admin',
           role: 'admin'
         }));
-        
-        // Set admin logged in state to show dashboard
         setIsAdminLoggedIn(true);
         setLoading(false);
         return;
       } catch (error) {
         setError('Admin login failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Staff login
+    if (formData.email === 'staff@cargo.com' && formData.password === 'staff123') {
+      try {
+        localStorage.setItem('staffSession', 'true');
+        localStorage.setItem('staffUser', JSON.stringify({
+          email: 'staff@cargo.com',
+          name: 'Staff',
+          role: 'staff'
+        }));
+        setIsStaffLoggedIn(true);
+        setLoading(false);
+        return;
+      } catch (error) {
+        setError('Staff login failed. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -52,11 +75,17 @@ const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
       setError(error.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
-    }  };
+    }
+  };
 
   // If admin is logged in, show the Admin Dashboard
   if (isAdminLoggedIn) {
     return <AdminDashboard />;
+  }
+
+  // If staff is logged in, show the Staff Bookings
+  if (isStaffLoggedIn) {
+    return <StaffBookings />;
   }
 
   return (

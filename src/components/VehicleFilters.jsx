@@ -58,8 +58,6 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     available: 'true',
     pickupDate: '',
     returnDate: '',
-    pickupTime: '09:00',
-    returnTime: '18:00',
     searchText: ''
   });
   
@@ -95,13 +93,6 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     setInputValues(prev => ({ ...prev, searchText: value }));
   }, []);
   
-  const handlePickupTimeChange = useCallback((value) => {
-    setInputValues(prev => ({ ...prev, pickupTime: value }));
-  }, []);
-  const handleReturnTimeChange = useCallback((value) => {
-    setInputValues(prev => ({ ...prev, returnTime: value }));
-  }, []);
-
   // Helper: check if a vehicle is available for the selected date range (date-based, ignore time)
   const isVehicleAvailableForDates = useCallback((vehicle, pickupDate, returnDate) => {
     if (vehicle.available === false) return false;
@@ -230,8 +221,6 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
       available: 'true',
       pickupDate: '',
       returnDate: '',
-      pickupTime: '09:00',
-      returnTime: '18:00',
       searchText: ''
     };
     
@@ -315,28 +304,6 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
             placeholderText="Select return date"
             minDate={inputValues.pickupDate ? parseDate(inputValues.pickupDate) : new Date()}
             isClearable
-          />
-        </div>
-
-        {/* Pickup Time Picker */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time</label>
-          <input
-            type="time"
-            value={inputValues.pickupTime}
-            onChange={e => handlePickupTimeChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Return Time Picker */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Return Time</label>
-          <input
-            type="time"
-            value={inputValues.returnTime}
-            onChange={e => handleReturnTimeChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
