@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, User, Phone, Mail, Car, X, Check } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Phone, Mail, Car, X, Check, AlertTriangle } from 'lucide-react';
 import { account, databases } from '../../appwrite/config';
-import { ID, Permission, Role } from 'appwrite';
+import { ID, Permission, Role, Query } from 'appwrite';
+import dayjs from 'dayjs';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+
+// Initialize dayjs plugins
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
 
 const BookingModal = ({ 
   isOpen, 
@@ -26,6 +35,18 @@ const BookingModal = ({
   const [error, setError] = useState('');
   const [totalCost, setTotalCost] = useState(0);
   const [numberOfDays, setNumberOfDays] = useState(0);
+  const [availabilityStatus, setAvailabilityStatus] = useState(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [conflictingBookings, setConflictingBookings] = useState([]);
+  const [disabledDates, setDisabledDates] = useState([]);
+  const [loadingDisabledDates, setLoadingDisabledDates] = useState(false);
+
+  // Load disabled dates when component mounts or vehicle changes
+  useEffect(() => {
+    if (selectedVehicle && isOpen) {
+      loadDisabledDates();
+    }
+  }, [selectedVehicle, isOpen]);
 
   // Calculate total cost when dates change
   useEffect(() => {
@@ -44,12 +65,150 @@ const BookingModal = ({
     }
   }, [bookingData.pickupDate, bookingData.returnDate, bookingData.driverRequired, selectedVehicle]);
 
+  // Check availability when dates change
+  useEffect(() => {
+    if (bookingData.pickupDate && bookingData.returnDate && selectedVehicle) {
+      checkVehicleAvailability();
+    }
+  }, [bookingData.pickupDate, bookingData.returnDate, selectedVehicle]);
+
+  const loadDisabledDates = async () => {
+    if (!selectedVehicle) return;
+
+    setLoadingDisabledDates(true);
+    try {
+      // Get all existing bookings for this vehicle
+      const existingBookings = await databases.listDocuments(
+        'cargo-car-rental',
+        'bookings',
+        [
+          Query.equal('vehicleId', selectedVehicle.id),
+          Query.notEqual('status', 'cancelled') // Exclude cancelled bookings
+        ]
+      );
+
+      console.log('Existing bookings for vehicle:', selectedVehicle.id, existingBookings.documents);
+
+      // Generate array of disabled date strings
+      const disabled = [];
+      existingBookings.documents.forEach(booking => {
+        console.log('Processing booking:', booking);
+        console.log('Raw pickup date:', booking.pickupDate);
+        console.log('Raw return date:', booking.returnDate);
+        
+        // Parse DateTime strings from Appwrite (format: MM/DD/YYYY HH:mm:ss.SSS AM/PM)
+        // Convert to a format dayjs can understand
+        const startDate = dayjs(new Date(booking.pickupDate)).startOf('day');
+        const endDate = dayjs(new Date(booking.returnDate)).startOf('day');
+        
+        console.log('Parsed booking dates:', {
+          pickup: startDate.format('YYYY-MM-DD'),
+          return: endDate.format('YYYY-MM-DD'),
+          pickupValid: startDate.isValid(),
+          returnValid: endDate.isValid()
+        });
+        
+        // Only proceed if dates are valid
+        if (startDate.isValid() && endDate.isValid()) {
+          // Add all dates from pickup to return (inclusive)
+          let currentDate = startDate;
+          while (currentDate.isSameOrBefore(endDate, 'day')) {
+            const dateString = currentDate.format('YYYY-MM-DD');
+            disabled.push(dateString);
+            console.log('Disabling date:', dateString);
+            currentDate = currentDate.add(1, 'day');
+          }
+        } else {
+          console.warn('Invalid dates in booking:', booking);
+        }
+      });
+
+      const uniqueDisabled = [...new Set(disabled)];
+      console.log('Final disabled dates array:', uniqueDisabled);
+      setDisabledDates(uniqueDisabled);
+    } catch (error) {
+      console.error('Error loading disabled dates:', error);
+    } finally {
+      setLoadingDisabledDates(false);
+    }
+  };
+
+  const isDateDisabled = (date) => {
+    const dateString = dayjs(date).format('YYYY-MM-DD');
+    return disabledDates.includes(dateString);
+  };
+
+  const handleDateChange = (name, value) => {
+    setBookingData(prev => ({
+      ...prev,
+      [name]: value ? dayjs(value).format('YYYY-MM-DD') : ''
+    }));
+    
+    // Clear error when valid date is selected
+    setError('');
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
     setBookingData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const checkVehicleAvailability = async () => {
+    if (!bookingData.pickupDate || !bookingData.returnDate || !selectedVehicle) {
+      return;
+    }
+
+    setCheckingAvailability(true);
+    setAvailabilityStatus(null);
+    setConflictingBookings([]);
+
+    try {
+      const requestedPickup = new Date(`${bookingData.pickupDate}T${bookingData.pickupTime}`);
+      const requestedReturn = new Date(`${bookingData.returnDate}T${bookingData.returnTime}`);
+
+      // Query existing bookings for this vehicle
+      const existingBookings = await databases.listDocuments(
+        'cargo-car-rental',
+        'bookings',
+        [
+          Query.equal('vehicleId', selectedVehicle.id),
+          Query.notEqual('status', 'cancelled') // Exclude cancelled bookings
+        ]
+      );
+
+      // Check for date conflicts
+      const conflicts = existingBookings.documents.filter(booking => {
+        const existingPickup = new Date(booking.pickupDate);
+        const existingReturn = new Date(booking.returnDate);
+
+        // Check if dates overlap
+        return (
+          (requestedPickup >= existingPickup && requestedPickup < existingReturn) ||
+          (requestedReturn > existingPickup && requestedReturn <= existingReturn) ||
+          (requestedPickup <= existingPickup && requestedReturn >= existingReturn)
+        );
+      });
+
+      if (conflicts.length > 0) {
+        setAvailabilityStatus('unavailable');
+        setConflictingBookings(conflicts);
+        setError('Vehicle is not available for the selected dates. Please choose different dates.');
+      } else {
+        setAvailabilityStatus('available');
+        setError('');
+      }
+
+    } catch (error) {
+      console.error('Error checking availability:', error);
+      setAvailabilityStatus('error');
+      setError('Unable to check availability. Please try again.');
+    } finally {
+      setCheckingAvailability(false);
+    }
   };
 
   const validateBooking = () => {
@@ -60,6 +219,36 @@ const BookingModal = ({
 
     if (new Date(bookingData.pickupDate) >= new Date(bookingData.returnDate)) {
       setError('Return date must be after pickup date');
+      return false;
+    }
+
+    // Check if any selected dates are disabled
+    if (disabledDates.includes(bookingData.pickupDate)) {
+      setError(`Pickup date ${bookingData.pickupDate} is not available. Please select a different date.`);
+      return false;
+    }
+
+    if (disabledDates.includes(bookingData.returnDate)) {
+      setError(`Return date ${bookingData.returnDate} is not available. Please select a different date.`);
+      return false;
+    }
+
+    // Check if any dates in the range are disabled
+    const startDate = dayjs(bookingData.pickupDate);
+    const endDate = dayjs(bookingData.returnDate);
+    let currentDate = startDate;
+    
+    while (currentDate.isSameOrBefore(endDate, 'day')) {
+      const dateString = currentDate.format('YYYY-MM-DD');
+      if (disabledDates.includes(dateString)) {
+        setError(`Your booking period includes unavailable date ${dateString}. Please select different dates.`);
+        return false;
+      }
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    if (availabilityStatus === 'unavailable') {
+      setError('Vehicle is not available for the selected dates');
       return false;
     }
 
@@ -81,7 +270,9 @@ const BookingModal = ({
     
     if (!validateBooking()) {
       return;
-    }    setLoading(true);
+    }
+    
+    setLoading(true);
     setError('');
 
     try {      // Create booking document for database (only use existing attributes)
@@ -183,6 +374,14 @@ const BookingModal = ({
     }
   };
 
+  const formatConflictDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -243,14 +442,20 @@ const BookingModal = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <Calendar size={16} className="inline mr-1" />
                   Pickup Date *
+                  {loadingDisabledDates && (
+                    <span className="text-xs text-gray-500 ml-2">(Loading availability...)</span>
+                  )}
                 </label>
-                <input
-                  type="date"
-                  name="pickupDate"
-                  value={bookingData.pickupDate}
-                  onChange={handleInputChange}
-                  min={new Date().toISOString().split('T')[0]}
+                <DatePicker
+                  selected={bookingData.pickupDate ? new Date(bookingData.pickupDate) : null}
+                  onChange={(date) => handleDateChange('pickupDate', date)}
+                  minDate={new Date()}
+                  disabled={loadingDisabledDates}
+                  dateFormat="yyyy-MM-dd"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholderText="Select pickup date"
+                  excludeDates={disabledDates.map(date => new Date(date))}
+                  filterDate={date => !isDateDisabled(date)}
                   required
                 />
               </div>
@@ -259,13 +464,16 @@ const BookingModal = ({
                   <Calendar size={16} className="inline mr-1" />
                   Return Date *
                 </label>
-                <input
-                  type="date"
-                  name="returnDate"
-                  value={bookingData.returnDate}
-                  onChange={handleInputChange}
-                  min={bookingData.pickupDate || new Date().toISOString().split('T')[0]}
+                <DatePicker
+                  selected={bookingData.returnDate ? new Date(bookingData.returnDate) : null}
+                  onChange={(date) => handleDateChange('returnDate', date)}
+                  minDate={bookingData.pickupDate ? dayjs(bookingData.pickupDate).add(1, 'day').toDate() : dayjs().add(1, 'day').toDate()}
+                  disabled={loadingDisabledDates || !bookingData.pickupDate}
+                  dateFormat="yyyy-MM-dd"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholderText="Select return date"
+                  excludeDates={disabledDates.map(date => new Date(date))}
+                  filterDate={date => !isDateDisabled(date)}
                   required
                 />
               </div>
@@ -296,6 +504,49 @@ const BookingModal = ({
                 />
               </div>
             </div>
+
+            {/* Availability Status */}
+            {(checkingAvailability || availabilityStatus) && (
+              <div className={`p-4 rounded-lg border ${
+                availabilityStatus === 'available' ? 'bg-green-50 border-green-200' :
+                availabilityStatus === 'unavailable' ? 'bg-red-50 border-red-200' :
+                'bg-gray-50 border-gray-200'
+              }`}>
+                {checkingAvailability ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm text-gray-600">Checking availability...</span>
+                  </div>
+                ) : availabilityStatus === 'available' ? (
+                  <div className="flex items-center space-x-2">
+                    <Check size={16} className="text-green-600" />
+                    <span className="text-sm text-green-800 font-medium">Vehicle is available for selected dates</span>
+                  </div>
+                ) : availabilityStatus === 'unavailable' ? (
+                  <div>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <AlertTriangle size={16} className="text-red-600" />
+                      <span className="text-sm text-red-800 font-medium">Vehicle is not available</span>
+                    </div>
+                    {conflictingBookings.length > 0 && (
+                      <div className="text-xs text-red-700">
+                        <p className="mb-1">Conflicting bookings:</p>
+                        {conflictingBookings.map((booking, index) => (
+                          <p key={index}>
+                            • {formatConflictDate(booking.pickupDate)} to {formatConflictDate(booking.returnDate)}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle size={16} className="text-yellow-600" />
+                    <span className="text-sm text-yellow-800">Unable to check availability</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Location Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -437,7 +688,12 @@ const BookingModal = ({
               </button>
               <button 
                 type="submit"
-                disabled={loading || numberOfDays === 0}
+                disabled={
+                  loading || 
+                  numberOfDays === 0 || 
+                  availabilityStatus === 'unavailable' || 
+                  checkingAvailability
+                }
                 className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
@@ -445,7 +701,11 @@ const BookingModal = ({
                 ) : (
                   <>
                     <Check size={16} />
-                    <span>Confirm Booking (₱{totalCost.toLocaleString()})</span>
+                    <span>
+                      {availabilityStatus === 'unavailable' ? 'Not Available' : 
+                       checkingAvailability ? 'Checking...' :
+                       `Confirm Booking (₱${totalCost.toLocaleString()})`}
+                    </span>
                   </>
                 )}
               </button>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
-import { account } from '../../appwrite/config';
+import { account, databases } from '../../appwrite/config';
 
 const BookingManager = ({ user, onUpdateBookings }) => {
   const [bookings, setBookings] = useState([]);
@@ -8,6 +8,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const [error, setError] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [vehicleAvailability, setVehicleAvailability] = useState({});
 
   // Load user bookings
   useEffect(() => {
@@ -27,13 +28,10 @@ const BookingManager = ({ user, onUpdateBookings }) => {
         new Date(b.createdAt) - new Date(a.createdAt)
       );
       
-      setBookings(sortedBookings);      
-      // Optionally, you can also load from database for more detailed information
-      // const dbBookings = await databases.listDocuments(
-      //   'YOUR_DATABASE_ID',
-      //   'YOUR_BOOKINGS_COLLECTION_ID',
-      //   [Query.equal('userId', user.$id)]
-      // );
+      setBookings(sortedBookings);
+      
+      // Load availability status for each vehicle
+      await loadVehicleAvailability(sortedBookings);
       
     } catch (error) {
       console.error('Error loading bookings:', error);
@@ -41,6 +39,52 @@ const BookingManager = ({ user, onUpdateBookings }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadVehicleAvailability = async (bookings) => {
+    try {
+      const availability = {};
+      
+      // Get unique vehicle IDs from bookings
+      const vehicleIds = [...new Set(bookings.map(booking => booking.vehicleId))];
+      
+      // Fetch availability for each vehicle
+      for (const vehicleId of vehicleIds) {
+        if (vehicleId) {
+          try {
+            const vehicle = await databases.getDocument(
+              process.env.REACT_APP_DATABASE_ID,
+              process.env.REACT_APP_VEHICLES_COLLECTION_ID,
+              vehicleId
+            );
+            availability[vehicleId] = vehicle.available;
+          } catch (error) {
+            console.error(`Error loading availability for vehicle ${vehicleId}:`, error);
+            availability[vehicleId] = false;
+          }
+        }
+      }
+      
+      setVehicleAvailability(availability);
+    } catch (error) {
+      console.error('Error loading vehicle availability:', error);
+    }
+  };
+
+  const getAvailabilityStatus = (vehicleId, bookingStatus) => {
+    if (bookingStatus === 'cancelled' || bookingStatus === 'completed') {
+      return null; // Don't show availability for past bookings
+    }
+    
+    const isAvailable = vehicleAvailability[vehicleId];
+    
+    if (isAvailable === undefined) {
+      return { text: 'Checking...', color: 'bg-gray-100 text-gray-600' };
+    }
+    
+    return isAvailable 
+      ? { text: 'Available', color: 'bg-green-100 text-green-800' }
+      : { text: 'Unavailable', color: 'bg-red-100 text-red-800' };
   };
 
   const getStatusColor = (status) => {
@@ -96,13 +140,8 @@ const BookingManager = ({ user, onUpdateBookings }) => {
       // Update local state
       setBookings(updatedBookings);
       
-      // Optionally update in database as well
-      // await databases.updateDocument(
-      //   'YOUR_DATABASE_ID',
-      //   'YOUR_BOOKINGS_COLLECTION_ID',
-      //   bookingId,
-      //   { status: 'cancelled', updatedAt: new Date().toISOString() }
-      // );
+      // Reload availability after cancellation
+      await loadVehicleAvailability(updatedBookings);
 
       // Notify parent component
       if (onUpdateBookings) {
@@ -192,7 +231,8 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                 <div className="flex-1">
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">
                     {booking.vehicleName}
-                  </h4>                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
                     <div className="flex items-center">
                       <Calendar size={14} className="mr-2" />
                       <span>Pickup: {formatDateTime(booking.pickupDate)}</span>
@@ -209,6 +249,12 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     {getStatusIcon(booking.status)}
                     <span className="capitalize">{booking.status}</span>
                   </span>
+                  
+                  {getAvailabilityStatus(booking.vehicleId, booking.status) && (
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getAvailabilityStatus(booking.vehicleId, booking.status).color}`}>
+                      {getAvailabilityStatus(booking.vehicleId, booking.status).text}
+                    </span>
+                  )}
                   
                   <div className="flex space-x-2">
                     <button 

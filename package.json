@@ -11,10 +11,18 @@
   },
   "dependencies": {
     "@appwrite.io/pink-icons": "^1.0.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^7.1.2",
+    "@mui/x-date-pickers": "^8.5.3",
     "@tailwindcss/vite": "^4.0.14",
+    "@types/react-datepicker": "^6.2.0",
     "appwrite": "^18.1.1",
+    "dayjs": "^1.11.13",
     "lucide-react": "^0.522.0",
     "react": "^19.0.0",
+    "react-datepicker": "^8.4.0",
+    "react-day-picker": "^9.7.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.14"
   },
