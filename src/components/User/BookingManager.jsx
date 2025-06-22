@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X, User } from 'lucide-react';
 import { account, databases } from '../../appwrite/config';
 import { Query } from 'appwrite';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const DATABASE_ID = 'cargo-car-rental';
 const BOOKINGS_COLLECTION_ID = 'bookings';
@@ -15,6 +17,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const [vehicleAvailability, setVehicleAvailability] = useState({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentBooking, setPaymentBooking] = useState(null);
+  const detailsRef = useRef(null);
 
   // Always fetch bookings from DB for this user
   useEffect(() => {
@@ -22,6 +25,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   }, [user]);
 
   const loadBookings = async () => {
+    
     try {
       setLoading(true);
       setError('');
@@ -210,6 +214,226 @@ const BookingManager = ({ user, onUpdateBookings }) => {
     });
   };
 
+  const patchUnsupportedColors = (element) => {
+    // Recursively patch all elements with oklch color
+    if (!element) return;
+    const tree = element.querySelectorAll('*');
+    tree.forEach(el => {
+      const style = window.getComputedStyle(el);
+      // Patch color
+      if (style.color && style.color.includes('oklch')) {
+        el.style.color = '#222'; // fallback
+      }
+      // Patch background
+      if (style.backgroundColor && style.backgroundColor.includes('oklch')) {
+        el.style.backgroundColor = '#fff'; // fallback
+      }
+      // Patch border color
+      if (style.borderColor && style.borderColor.includes('oklch')) {
+        el.style.borderColor = '#ccc'; // fallback
+      }
+    });
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedBooking) return;
+
+    // Helper to format numbers without any currency sign or extra characters
+    const formatNumber = (num) => {
+      if (typeof num === 'number') return num.toLocaleString();
+      if (typeof num === 'string') return num.replace(/[^\d.,]/g, '');
+      return '-';
+    };
+
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4'
+    });
+
+    const margin = 40;
+    let y = margin;
+
+    // CarGo Logo (optional: replace with your logo URL)
+    // const logoUrl = 'https://your-cargo-logo-url.png';
+    // try {
+    //   const logoResp = await fetch(logoUrl);
+    //   const logoBlob = await logoResp.blob();
+    //   const logoReader = new FileReader();
+    //   const logoBase64 = await new Promise((resolve, reject) => {
+    //     logoReader.onloadend = () => resolve(logoReader.result);
+    //     logoReader.onerror = reject;
+    //     logoReader.readAsDataURL(logoBlob);
+    //   });
+    //   pdf.addImage(logoBase64, 'PNG', margin, y, 60, 60);
+    // } catch {}
+    // y += 70;
+
+    // Company Header
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(30, 64, 175); // CarGo blue
+    pdf.text('CarGo', margin, y);
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(60, 60, 60);
+    pdf.text('Cargo Car Rental Services', margin, y + 18);
+    pdf.text('123 Main St, Metro Manila, Philippines', margin, y + 34);
+    pdf.text('Email: support@cargo.com | Phone: +63 912 345 6789', margin, y + 50);
+    y += 70;
+
+    // Receipt Title & Info
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text('Official Booking Receipt', margin, y);
+    y += 28;
+
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Receipt #: ${selectedBooking.id}`, margin, y);
+    pdf.text(`Status: ${selectedBooking.status.charAt(0).toUpperCase() + selectedBooking.status.slice(1)}`, margin + 300, y);
+    y += 16;
+    pdf.text(`Date Issued: ${new Date().toLocaleString()}`, margin, y);
+    y += 24;
+
+    // Draw a line
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, y, 555, y);
+    y += 16;
+
+    // User Info
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Customer Information', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Name: ${selectedBooking.userName || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Email: ${selectedBooking.userEmail || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`User ID: ${selectedBooking.userId || '-'}`, margin, y);
+    y += 22;
+
+    // Vehicle Info
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Vehicle Details', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Vehicle: ${selectedBooking.vehicleName || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Type: ${selectedBooking.vehicleType || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Vehicle ID: ${selectedBooking.vehicleId || '-'}`, margin, y);
+    y += 22;
+
+    // Booking Dates
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Booking Schedule', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Pickup: ${selectedBooking.pickupDate ? new Date(selectedBooking.pickupDate).toLocaleString() : '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Pickup Location: ${selectedBooking.pickupLocation || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Return: ${selectedBooking.returnDate ? new Date(selectedBooking.returnDate).toLocaleString() : '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Return Location: ${selectedBooking.returnLocation || '-'}`, margin, y);
+    y += 22;
+
+    // Emergency Contact
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Emergency Contact', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Name: ${selectedBooking.emergencyContact || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Phone: ${selectedBooking.emergencyPhone || '-'}`, margin, y);
+    y += 22;
+
+    // Special Requests & Driver
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Other Details', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Special Requests: ${selectedBooking.specialRequests || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Driver Required: ${selectedBooking.driverRequired ? 'Yes' : 'No'}`, margin, y);
+    y += 22;
+
+    // Cost Summary
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Cost Summary', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Price per Day: ${formatNumber(selectedBooking.pricePerDay) || '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Number of Days: ${formatNumber(selectedBooking.numberOfDays) || '-'}`, margin, y);
+    y += 14;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(34, 197, 94); // green
+    pdf.text(`Total Cost: ${formatNumber(selectedBooking.totalCost) || '-'}`, margin, y);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'normal');
+    y += 22;
+
+    // Payment Info
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Payment', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Payment File Name: ${selectedBooking.paymentFileName || '-'}`, margin, y);
+    y += 14;
+
+    // Payment Image
+    if (selectedBooking.paymentFieldId) {
+      try {
+        const imageUrl = `https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${selectedBooking.paymentFieldId}/view?project=685682ba00095008cb7d`;
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        y += 8;
+        pdf.text('Payment Proof:', margin, y);
+        y += 8;
+        pdf.addImage(base64, 'JPEG', margin, y, 120, 120);
+        y += 130;
+      } catch (e) {
+        pdf.text('Payment Proof: [Image could not be loaded]', margin, y);
+        y += 16;
+      }
+    } else {
+      pdf.text('Payment Proof: No Image', margin, y);
+      y += 16;
+    }
+
+    // Timestamps
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Timestamps', margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Created At: ${selectedBooking.createdAt ? new Date(selectedBooking.createdAt).toLocaleString() : '-'}`, margin, y);
+    y += 14;
+    pdf.text(`Updated At: ${selectedBooking.updatedAt ? new Date(selectedBooking.updatedAt).toLocaleString() : '-'}`, margin, y);
+    y += 22;
+
+    // Draw a line
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(margin, y, 555, y);
+    y += 16;
+
+    // Footer
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setTextColor(120, 120, 120);
+    pdf.text('Thank you for choosing CarGo. For inquiries, contact support@cargo.com', margin, y + 10);
+
+    pdf.save(`CarGo-Receipt-${selectedBooking.id}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -332,7 +556,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
       {showDetailsModal && selectedBooking && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+            <div className="p-6" ref={detailsRef}>
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-800">Booking Details</h3>
                 <button 
@@ -486,28 +710,32 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     <div><span className="font-medium">Updated At:</span> {formatDateTime(selectedBooking.updatedAt)}</div>
                   </div>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="flex space-x-3 pt-4">
-                  <button 
-                    onClick={() => setShowDetailsModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-300"
-                  >
-                    Close
-                  </button>
-                  {selectedBooking.status === 'pending' && (
-                    <button 
-                      onClick={() => {
-                        handleCancelBooking(selectedBooking.id);
-                        setShowDetailsModal(false);
-                      }}
-                      className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300"
-                    >
-                      Cancel Booking
-                    </button>
-                  )}
-                </div>
               </div>
+            </div>
+            <div className="flex space-x-3 px-6 pb-6">
+              <button
+                onClick={handleExportPDF}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300"
+              >
+                Export as PDF
+              </button>
+              <button 
+                onClick={() => setShowDetailsModal(false)}
+                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-300"
+              >
+                Close
+              </button>
+              {selectedBooking.status === 'pending' && (
+                <button 
+                  onClick={() => {
+                    handleCancelBooking(selectedBooking.id);
+                    setShowDetailsModal(false);
+                  }}
+                  className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300"
+                >
+                  Cancel Booking
+                </button>
+              )}
             </div>
           </div>
         </div>
