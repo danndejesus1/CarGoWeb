@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Search, Filter } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 // Memoized input component that won't re-render unless its specific props change
 const StableInput = memo(({ label, value, onChange, placeholder, type = "text", options = [] }) => {
@@ -55,6 +57,8 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     available: 'true',
     pickupDate: '',
     returnDate: '',
+    pickupTime: '09:00',
+    returnTime: '18:00',
     searchText: ''
   });
   
@@ -90,10 +94,55 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     setInputValues(prev => ({ ...prev, searchText: value }));
   }, []);
   
+  const handlePickupTimeChange = useCallback((value) => {
+    setInputValues(prev => ({ ...prev, pickupTime: value }));
+  }, []);
+  const handleReturnTimeChange = useCallback((value) => {
+    setInputValues(prev => ({ ...prev, returnTime: value }));
+  }, []);
+
+  // Helper: check if a vehicle is available for the selected date range
+  const isVehicleAvailableForDates = useCallback((vehicle, pickupDate, returnDate, pickupTime, returnTime) => {
+    // Check vehicle availability property first (like modal)
+    if (vehicle.available === false) return false;
+    if (!pickupDate || !returnDate) return true;
+    if (!vehicle.bookings || !Array.isArray(vehicle.bookings)) return true;
+
+    // Use selected times
+    const requestedPickup = new Date(`${pickupDate}T${pickupTime}:00Z`);
+    const requestedReturn = new Date(`${returnDate}T${returnTime}:00Z`);
+
+    for (const booking of vehicle.bookings) {
+      if (booking.status === 'cancelled') continue;
+
+      let existingPickup, existingReturn;
+      try {
+        existingPickup = new Date(booking.pickupDate);
+        existingReturn = new Date(booking.returnDate);
+        if (isNaN(existingPickup.getTime()) || isNaN(existingReturn.getTime())) continue;
+
+        const hasOverlap =
+          (requestedPickup >= existingPickup && requestedPickup < existingReturn) ||
+          (requestedReturn > existingPickup && requestedReturn <= existingReturn) ||
+          (requestedPickup <= existingPickup && requestedReturn >= existingReturn);
+
+        if (hasOverlap) {
+          return false;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return true;
+  }, []);
+
   // Apply all filters - only called when button is clicked
   const applyAllFilters = useCallback(() => {
+    console.log('Applying filters with values:', inputValues);
+    
     // Guard against vehicles not being available
     if (!vehiclesRef.current || !Array.isArray(vehiclesRef.current)) {
+      console.log('No vehicles available to filter');
       onFilteredVehiclesChange([]);
       return;
     }
@@ -101,6 +150,7 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     try {
       // Create a copy of the vehicles array
       let filtered = [...vehiclesRef.current];
+      console.log('Starting with', filtered.length, 'vehicles');
       
       // Apply search filter
       if (inputValues.searchText) {
@@ -109,37 +159,71 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           (v?.make?.toLowerCase()?.includes(searchLower)) ||
           (v?.model?.toLowerCase()?.includes(searchLower))
         );
+        console.log('After search filter:', filtered.length, 'vehicles');
       }
       
-      // Apply dropdown filters
+      // Apply make filter (case-insensitive, partial match)
       if (inputValues.make) {
-        filtered = filtered.filter(v => v.make === inputValues.make);
+        const makeLower = inputValues.make.toLowerCase();
+        filtered = filtered.filter(v => v.make && v.make.toLowerCase().includes(makeLower));
+        console.log('After make filter:', filtered.length, 'vehicles');
       }
       
       if (inputValues.type) {
         filtered = filtered.filter(v => v.type === inputValues.type);
+        console.log('After type filter:', filtered.length, 'vehicles');
       }
       
       if (inputValues.gasType) {
         filtered = filtered.filter(v => v.gasType === inputValues.gasType);
+        console.log('After gas type filter:', filtered.length, 'vehicles');
       }
       
+      // Apply seating capacity filter (partial match, not strict equality)
       if (inputValues.seatingCapacity) {
-        filtered = filtered.filter(v => v.seatingCapacity === parseInt(inputValues.seatingCapacity));
+        const seatStr = String(inputValues.seatingCapacity).toLowerCase();
+        filtered = filtered.filter(v => 
+          v.seatingCapacity !== undefined &&
+          String(v.seatingCapacity).toLowerCase().includes(seatStr)
+        );
+        console.log('After seating capacity filter:', filtered.length, 'vehicles');
+      }
+
+      // Filter by availability for selected pickup/return dates
+      if (inputValues.pickupDate && inputValues.returnDate) {
+        console.log('Applying date availability filter...');
+        const beforeDateFilter = filtered.length;
+        
+        filtered = filtered.filter(v => {
+          const isAvailable = isVehicleAvailableForDates(
+            v,
+            inputValues.pickupDate,
+            inputValues.returnDate,
+            inputValues.pickupTime,
+            inputValues.returnTime
+          );
+          console.log(`Vehicle ${v.id} (${v.make} ${v.model}) is ${isAvailable ? 'available' : 'unavailable'}`);
+          return isAvailable;
+        });
+        
+        console.log(`Date filter: ${beforeDateFilter} -> ${filtered.length} vehicles`);
       }
       
+      // Apply general availability filter
       if (inputValues.available !== '') {
         const isAvailable = inputValues.available === 'true';
         filtered = filtered.filter(v => v.available === isAvailable);
+        console.log('After availability filter:', filtered.length, 'vehicles');
       }
       
+      console.log('Final filtered count:', filtered.length);
       // Update parent component
       onFilteredVehiclesChange(filtered);
     } catch (error) {
       console.error("Error filtering vehicles:", error);
       onFilteredVehiclesChange([]);
     }
-  }, [inputValues, onFilteredVehiclesChange]);
+  }, [inputValues, onFilteredVehiclesChange, isVehicleAvailableForDates]);
   
   // Clear all filters
   const clearFilters = useCallback(() => {
@@ -151,6 +235,8 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
       available: 'true',
       pickupDate: '',
       returnDate: '',
+      pickupTime: '09:00',
+      returnTime: '18:00',
       searchText: ''
     };
     
@@ -161,6 +247,9 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
       onFilteredVehiclesChange(vehiclesRef.current);
     }
   }, [onFilteredVehiclesChange]);
+
+  // Helper for date input values
+  const parseDate = (str) => (str ? new Date(str) : null);
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-8">
@@ -200,17 +289,69 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           />
         </div>
 
-        {/* Filter Options - Memoized */}
+        {/* Pickup Date Picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date</label>
+          <DatePicker
+            selected={parseDate(inputValues.pickupDate)}
+            onChange={date => setInputValues(prev => ({
+              ...prev,
+              pickupDate: date ? date.toISOString().slice(0, 10) : ''
+            }))}
+            dateFormat="yyyy-MM-dd"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+            placeholderText="Select pickup date"
+            isClearable
+            minDate={new Date()}
+          />
+        </div>
+
+        {/* Return Date Picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
+          <DatePicker
+            selected={parseDate(inputValues.returnDate)}
+            onChange={date => setInputValues(prev => ({
+              ...prev,
+              returnDate: date ? date.toISOString().slice(0, 10) : ''
+            }))}
+            dateFormat="yyyy-MM-dd"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+            placeholderText="Select return date"
+            minDate={inputValues.pickupDate ? parseDate(inputValues.pickupDate) : new Date()}
+            isClearable
+          />
+        </div>
+
+        {/* Pickup Time Picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Time</label>
+          <input
+            type="time"
+            value={inputValues.pickupTime}
+            onChange={e => handlePickupTimeChange(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Return Time Picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Return Time</label>
+          <input
+            type="time"
+            value={inputValues.returnTime}
+            onChange={e => handleReturnTimeChange(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Make as text input */}
         <StableInput 
           label="Make"
           value={inputValues.make}
           onChange={handleMakeChange}
-          type="select"
-          options={[
-            { value: "", label: "All Makes" },
-            { value: "Toyota", label: "Toyota" },
-            { value: "Honda", label: "Honda" }
-          ]}
+          type="text"
+          placeholder="Enter make..."
         />
 
         <StableInput 
@@ -237,17 +378,13 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           ]}
         />
 
+        {/* Seating Capacity as text input */}
         <StableInput 
           label="Seating Capacity"
           value={inputValues.seatingCapacity}
           onChange={handleSeatingCapacityChange}
-          type="select"
-          options={[
-            { value: "", label: "Any Capacity" },
-            { value: "4", label: "4" },
-            { value: "5", label: "5" },
-            { value: "7", label: "7" }
-          ]}
+          type="text"
+          placeholder="Enter capacity..."
         />
 
         <StableInput 
@@ -315,6 +452,28 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
             <button 
               onClick={() => handleSeatingCapacityChange('')}
               className="ml-1 text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </span>
+        )}
+        {inputValues.pickupDate && (
+          <span className="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded">
+            Pickup: {inputValues.pickupDate}
+            <button 
+              onClick={() => setInputValues(prev => ({ ...prev, pickupDate: '' }))}
+              className="ml-1 text-green-500 hover:text-green-700"
+            >
+              ×
+            </button>
+          </span>
+        )}
+        {inputValues.returnDate && (
+          <span className="inline-flex items-center bg-green-100 text-green-800 px-2 py-1 rounded">
+            Return: {inputValues.returnDate}
+            <button 
+              onClick={() => setInputValues(prev => ({ ...prev, returnDate: '' }))}
+              className="ml-1 text-green-500 hover:text-green-700"
             >
               ×
             </button>
