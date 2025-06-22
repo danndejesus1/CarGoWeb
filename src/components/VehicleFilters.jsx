@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Search, Filter } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import dayjs from 'dayjs';
 
 // Memoized input component that won't re-render unless its specific props change
 const StableInput = memo(({ label, value, onChange, placeholder, type = "text", options = [] }) => {
@@ -101,36 +102,32 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     setInputValues(prev => ({ ...prev, returnTime: value }));
   }, []);
 
-  // Helper: check if a vehicle is available for the selected date range
-  const isVehicleAvailableForDates = useCallback((vehicle, pickupDate, returnDate, pickupTime, returnTime) => {
-    // Check vehicle availability property first (like modal)
+  // Helper: check if a vehicle is available for the selected date range (date-based, ignore time)
+  const isVehicleAvailableForDates = useCallback((vehicle, pickupDate, returnDate) => {
     if (vehicle.available === false) return false;
     if (!pickupDate || !returnDate) return true;
     if (!vehicle.bookings || !Array.isArray(vehicle.bookings)) return true;
 
-    // Use selected times
-    const requestedPickup = new Date(`${pickupDate}T${pickupTime}:00Z`);
-    const requestedReturn = new Date(`${returnDate}T${returnTime}:00Z`);
+    // Generate all requested dates
+    const reqStart = dayjs(pickupDate);
+    const reqEnd = dayjs(returnDate);
+    const requestedDates = new Set();
+    let d = reqStart;
+    while (d.isSameOrBefore(reqEnd, 'day')) {
+      requestedDates.add(d.format('YYYY-MM-DD'));
+      d = d.add(1, 'day');
+    }
 
     for (const booking of vehicle.bookings) {
       if (booking.status === 'cancelled') continue;
-
-      let existingPickup, existingReturn;
-      try {
-        existingPickup = new Date(booking.pickupDate);
-        existingReturn = new Date(booking.returnDate);
-        if (isNaN(existingPickup.getTime()) || isNaN(existingReturn.getTime())) continue;
-
-        const hasOverlap =
-          (requestedPickup >= existingPickup && requestedPickup < existingReturn) ||
-          (requestedReturn > existingPickup && requestedReturn <= existingReturn) ||
-          (requestedPickup <= existingPickup && requestedReturn >= existingReturn);
-
-        if (hasOverlap) {
+      const bookStart = dayjs(typeof booking.pickupDate === 'string' ? booking.pickupDate.slice(0, 10) : booking.pickupDate);
+      const bookEnd = dayjs(typeof booking.returnDate === 'string' ? booking.returnDate.slice(0, 10) : booking.returnDate);
+      let bd = bookStart;
+      while (bd.isSameOrBefore(bookEnd, 'day')) {
+        if (requestedDates.has(bd.format('YYYY-MM-DD'))) {
           return false;
         }
-      } catch {
-        continue;
+        bd = bd.add(1, 'day');
       }
     }
     return true;
@@ -198,9 +195,7 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           const isAvailable = isVehicleAvailableForDates(
             v,
             inputValues.pickupDate,
-            inputValues.returnDate,
-            inputValues.pickupTime,
-            inputValues.returnTime
+            inputValues.returnDate
           );
           console.log(`Vehicle ${v.id} (${v.make} ${v.model}) is ${isAvailable ? 'available' : 'unavailable'}`);
           return isAvailable;

@@ -169,25 +169,36 @@ const HomePage = () => {
         'cargo-car-rental',
         'vehicles'
       );
-      
-      console.log('Homepage loaded vehicles:', response.documents);
-      
+      // Fetch all bookings (not just mock)
+      const bookingsResponse = await databases.listDocuments(
+        'cargo-car-rental',
+        'bookings'
+      );
+      const allBookings = bookingsResponse.documents;
+
       // Transform database documents to match expected format
-      const dbVehicles = response.documents.map(doc => ({
-        id: doc.$id,
-        make: doc.make,
-        model: doc.model,
-        type: doc.type,
-        gasType: doc.gasType,
-        seatingCapacity: doc.seatingCapacity,
-        pricePerDay: doc.pricePerDay,
-        imageFileId: doc.imageFileId, // Keep the file ID for direct access
-        imageUrl: doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop', // Fallback URL
-        available: doc.available !== false // Handle both true/false and undefined
-      }));
-      
+      const dbVehicles = response.documents.map(doc => {
+        // Attach bookings for this vehicle
+        const vehicleBookings = allBookings.filter(
+          b => b.vehicleId === doc.$id && b.status !== 'cancelled'
+        );
+        return {
+          id: doc.$id,
+          make: doc.make,
+          model: doc.model,
+          type: doc.type,
+          gasType: doc.gasType,
+          seatingCapacity: doc.seatingCapacity,
+          pricePerDay: doc.pricePerDay,
+          imageFileId: doc.imageFileId,
+          imageUrl: doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop',
+          available: doc.available !== false,
+          bookings: vehicleBookings // <-- attach bookings here
+        };
+      });
+
       setVehicles(dbVehicles);
-      
+
       // Apply initial filter to show only available vehicles
       const availableVehicles = dbVehicles.filter(vehicle => vehicle.available);
       setFilteredVehicles(availableVehicles);
