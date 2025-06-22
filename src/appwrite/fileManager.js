@@ -5,14 +5,15 @@ import { ID } from 'appwrite';
 export const FILE_CATEGORIES = {
   USER_ID: 'user_id',
   VEHICLE_IMAGE: 'vehicle_image',
-  VEHICLE_DOCUMENT: 'vehicle_document'
+  VEHICLE_DOCUMENT: 'vehicle_document',
+  PAYMENT_PROOF: 'payment_proof' // Added for payment QR uploads
 };
 
 // Generate organized file name with category prefix
 export const generateFileName = (category, userId, originalFileName, additionalId = null) => {
   const timestamp = Date.now();
   const fileExtension = originalFileName.split('.').pop();
-  
+
   switch (category) {
     case FILE_CATEGORIES.USER_ID:
       return `id_${userId}_${timestamp}.${fileExtension}`;
@@ -20,6 +21,8 @@ export const generateFileName = (category, userId, originalFileName, additionalI
       return `vehicle_${additionalId || 'temp'}_${userId}_${timestamp}.${fileExtension}`;
     case FILE_CATEGORIES.VEHICLE_DOCUMENT:
       return `doc_${additionalId || 'temp'}_${userId}_${timestamp}.${fileExtension}`;
+    case FILE_CATEGORIES.PAYMENT_PROOF:
+      return `payment_${userId}_${additionalId || 'booking'}_${timestamp}.${fileExtension}`;
     default:
       return `file_${userId}_${timestamp}.${fileExtension}`;
   }
@@ -105,6 +108,9 @@ export const validateFile = (file, category) => {
       break;
     case FILE_CATEGORIES.VEHICLE_DOCUMENT:
       allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      break;
+    case FILE_CATEGORIES.PAYMENT_PROOF:
+      allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
       break;
     default:
       allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];

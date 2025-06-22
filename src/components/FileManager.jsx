@@ -42,16 +42,39 @@ const FileManager = () => {
     if (!userData || !userData.prefs) return;
     
     // Get user's ID file information from preferences
-    const { idFileId, idFileName, fileCategory } = userData.prefs;
-    
+    const { idFileId, idFileName, fileCategory, bookings } = userData.prefs;
+
+    const userFilesArr = [];
+
     if (idFileId) {
-      setUserFiles([{
+      userFilesArr.push({
         fileId: idFileId,
         fileName: idFileName || 'Unknown',
         category: fileCategory || 'user_id',
         type: 'ID Document'
-      }]);
+      });
     }
+
+    // Add payment proof files from bookings (if any)
+    if (Array.isArray(bookings)) {
+      // Sort bookings by createdAt descending (newest first)
+      const sortedBookings = bookings
+        .slice()
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      sortedBookings.forEach(b => {
+        // Use your schema's payment field
+        if (b.paymentFieldId) {
+          userFilesArr.push({
+            fileId: b.paymentFieldId,
+            fileName: b.paymentFileName || 'Payment Proof', // <-- will use the file name from booking
+            category: 'payment_proof',
+            type: 'Payment Proof'
+          });
+        }
+      });
+    }
+
+    setUserFiles(userFilesArr);
   };
 
   const FileCard = ({ file, isUserFile = false }) => (

@@ -6,6 +6,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Account from './components/Account';
 import BookingModal from './components/User/BookingModal';
+import VehicleFilters from './components/VehicleFilters';
 import './App.css';
 
 const HomePage = () => {
@@ -19,6 +20,13 @@ const HomePage = () => {
   const [bookings, setBookings] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    message: ''
+  });
+  const [contactMessage, setContactMessage] = useState('');
+  const [activeSection, setActiveSection] = useState('home');
 
   // Function to get direct file URL (same as admin dashboard)
   const getDirectFileUrl = (fileId) => {
@@ -72,22 +80,7 @@ const HomePage = () => {
         }}
       />
     );
-  };const [filters, setFilters] = useState({
-    make: '',
-    type: '',
-    gasType: '',
-    seatingCapacity: '',
-    available: 'true', // Default to show only available vehicles
-    pickupDate: '',
-    returnDate: ''
-  });
-  const [contactForm, setContactForm] = useState({
-    name: '',
-    email: '',
-    message: ''
-  });
-  const [contactMessage, setContactMessage] = useState('');
-  const [activeSection, setActiveSection] = useState('home');
+  };
 
   // Mock data - in real app, this would come from API
   const mockVehicles = [
@@ -132,12 +125,6 @@ const HomePage = () => {
       imageUrl: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400&h=250&fit=crop'
     }
   ];
-
-  const mockUser = {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com'
-  };
 
   const mockBookings = [
     {
@@ -211,29 +198,7 @@ const HomePage = () => {
       setFilteredVehicles(mockVehicles);
     }
   };
-  // Filter vehicles
-  const applyFilters = () => {
-    let filtered = vehicles;
-
-    if (filters.make) {
-      filtered = filtered.filter(v => v.make === filters.make);
-    }
-    if (filters.type) {
-      filtered = filtered.filter(v => v.type === filters.type);
-    }
-    if (filters.gasType) {
-      filtered = filtered.filter(v => v.gasType === filters.gasType);
-    }
-    if (filters.seatingCapacity) {
-      filtered = filtered.filter(v => v.seatingCapacity === parseInt(filters.seatingCapacity));
-    }
-    if (filters.available !== '') {
-      const isAvailable = filters.available === 'true';
-      filtered = filtered.filter(v => v.available === isAvailable);
-    }
-
-    setFilteredVehicles(filtered);
-  };// Handle booking
+  // Handle booking
   const handleBookVehicle = (vehicle) => {
     if (!isLoggedIn) {
       showLoginModal();
@@ -284,15 +249,6 @@ const HomePage = () => {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
-
-  // Handle showing register modal (logout first if needed)
-  const showRegisterModal = async () => {
-    if (isLoggedIn) {
-      await handleLogout();
-    }
-    setAuthMode('register');
-    setShowAuth(true);
   };
 
   // Handle showing login modal (logout first if needed)
@@ -353,7 +309,7 @@ const HomePage = () => {
             onClick={() => setActiveSection('vehicles')}
             className={`px-3 py-2 rounded-md transition-colors ${activeSection === 'vehicles' ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}
           >
-            Vehicles
+            Book Vehicles
           </button>
           <button 
             onClick={() => setActiveSection('contact')}
@@ -418,106 +374,160 @@ const HomePage = () => {
     </section>
   );
 
-  // Vehicle filters
-  const VehicleFilters = () => (
-    <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-      <h3 className="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-        <Search className="mr-2" size={20} />
-        Filter Vehicles
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
-          <select 
-            value={filters.make}
-            onChange={(e) => setFilters({...filters, make: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  // New informational section for homepage
+  const HomeServicesSection = () => (
+    <section className="py-16 px-4 bg-gray-50">
+      <div className="container mx-auto">
+        <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">Our Services</h2>
+
+        {/* Services overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+            <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
+              <Car className="h-10 w-10 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Premium Vehicles</h3>
+            <p className="text-gray-600">
+              Choose from our wide range of well-maintained vehicles, from compact sedans to spacious SUVs.
+              All our cars are regularly serviced and sanitized for your safety and comfort.
+            </p>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+            <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
+              <Calendar className="h-10 w-10 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Flexible Booking</h3>
+            <p className="text-gray-600">
+              Book online in minutes with our easy-to-use platform. Enjoy flexible pickup and return options,
+              with the ability to modify or cancel your reservation as needed.
+            </p>
+          </div>
+          
+          <div
+            className="bg-white rounded-lg shadow-md p-6 text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveSection('contact')}
+            tabIndex={0}
+            role="button"
+            aria-label="Contact Us"
+            onKeyPress={e => {
+              if (e.key === 'Enter' || e.key === ' ') setActiveSection('contact');
+            }}
           >
-            <option value="">All Makes</option>
-            <option value="Toyota">Toyota</option>
-            <option value="Honda">Honda</option>
-          </select>
+            <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
+              <Users className="h-10 w-10 text-blue-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Contact Us</h3>
+            <p className="text-gray-600">
+              Our customer service team is available around the clock to assist with any inquiries or issues.
+              Roadside assistance is included with every rental for your peace of mind.
+            </p>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Car Type</label>
-          <select 
-            value={filters.type}
-            onChange={(e) => setFilters({...filters, type: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        
+        {/* Vehicle categories */}
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">Our Fleet</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="h-48 bg-blue-100 flex items-center justify-center">
+              <Car className="h-16 w-16 text-blue-600" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Sedans</h3>
+              <p className="text-gray-600 mb-4">
+                Comfortable and fuel-efficient cars perfect for city driving and small families.
+              </p>
+              <div className="text-sm text-gray-700">
+                <div className="flex justify-between mb-1">
+                  <span>Passengers:</span>
+                  <span>4-5 people</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span>Luggage:</span>
+                  <span>2-3 bags</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Starting at:</span>
+                  <span className="font-semibold">₱1,500/day</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="h-48 bg-green-100 flex items-center justify-center">
+              <Car className="h-16 w-16 text-green-600" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">SUVs</h3>
+              <p className="text-gray-600 mb-4">
+                Spacious vehicles with higher seating position and ample storage for adventures.
+              </p>
+              <div className="text-sm text-gray-700">
+                <div className="flex justify-between mb-1">
+                  <span>Passengers:</span>
+                  <span>5-7 people</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span>Luggage:</span>
+                  <span>3-5 bags</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Starting at:</span>
+                  <span className="font-semibold">₱2,500/day</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="h-48 bg-yellow-100 flex items-center justify-center">
+              <Car className="h-16 w-16 text-yellow-600" />
+            </div>
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Premium</h3>
+              <p className="text-gray-600 mb-4">
+                Luxury vehicles featuring top-tier comfort, performance, and the latest technology.
+              </p>
+              <div className="text-sm text-gray-700">
+                <div className="flex justify-between mb-1">
+                  <span>Passengers:</span>
+                  <span>4-5 people</span>
+                </div>
+                <div className="flex justify-between mb-1">
+                  <span>Luggage:</span>
+                  <span>2-4 bags</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Starting at:</span>
+                  <span className="font-semibold">₱3,000/day</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="text-center">
+          <button 
+            onClick={() => setActiveSection('vehicles')}
+            className="bg-blue-600 text-white font-bold py-3 px-8 rounded-md hover:bg-blue-700 transition duration-300"
           >
-            <option value="">All Types</option>
-            <option value="Sedan">Sedan</option>
-            <option value="SUV">SUV</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Gas Type</label>
-          <select 
-            value={filters.gasType}
-            onChange={(e) => setFilters({...filters, gasType: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">All Gas Types</option>
-            <option value="Petrol">Petrol</option>
-            <option value="Diesel">Diesel</option>
-          </select>
-        </div>        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Seating Capacity</label>
-          <select 
-            value={filters.seatingCapacity}
-            onChange={(e) => setFilters({...filters, seatingCapacity: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Any Capacity</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="7">7</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
-          <select 
-            value={filters.available}
-            onChange={(e) => setFilters({...filters, available: e.target.value})}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">All Vehicles</option>
-            <option value="true">Available Only</option>
-            <option value="false">Unavailable Only</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Date</label>
-          <input 
-            type="date"
-            value={filters.pickupDate}
-            onChange={(e) => setFilters({...filters, pickupDate: e.target.value})}
-            min={new Date().toISOString().split('T')[0]}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
-          <input 
-            type="date"
-            value={filters.returnDate}
-            onChange={(e) => setFilters({...filters, returnDate: e.target.value})}
-            min={filters.pickupDate || new Date().toISOString().split('T')[0]}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+            Browse Our Fleet
+          </button>
         </div>
       </div>
-      <div className="mt-6 text-right">
-        <button 
-          onClick={applyFilters}
-          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition duration-300 flex items-center space-x-2 ml-auto"
-        >
-          <Search size={16} />
-          <span>Apply Filter</span>
-        </button>
-      </div>
-    </div>
-  );  // Vehicle card component
+    </section>
+  );
+
+  // Vehicle filters - now replaced with VehicleFilters component
+  const VehicleFiltersSection = () => (
+    <VehicleFilters 
+      vehicles={vehicles}
+      onFilteredVehiclesChange={setFilteredVehicles} // Direct state setter, no useCallback needed
+    />
+  );
+
+  // Vehicle card component
   const VehicleCard = ({ vehicle }) => (
     <div className={`bg-white rounded-lg shadow-md overflow-hidden transform transition duration-300 hover:scale-105 hover:shadow-xl ${
       !vehicle.available ? 'opacity-75' : ''
@@ -572,7 +582,10 @@ const HomePage = () => {
     <section className="py-16 px-4 bg-gray-50 min-h-screen">
       <div className="container mx-auto">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-10">Our Featured Vehicles</h2>
-        <VehicleFilters />
+        
+        {/* Only show filters when in the vehicles tab */}
+        {activeSection === 'vehicles' && <VehicleFiltersSection />}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredVehicles.length > 0 ? (
             filteredVehicles.map(vehicle => (
@@ -682,14 +695,14 @@ const HomePage = () => {
       {activeSection === 'home' && (
         <>
           <HeroSection />
-          <VehiclesSection />
+          <HomeServicesSection />
         </>
       )}
       
       {activeSection === 'vehicles' && <VehiclesSection />}
       {activeSection === 'contact' && <ContactSection />}
       {activeSection === 'account' && isLoggedIn && <AccountSection />}
-        <Footer />
+      <Footer />
       <BookingModalComponent />
       
       {/* Authentication Modal */}

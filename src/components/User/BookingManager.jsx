@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
+import { Calendar, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X, User } from 'lucide-react';
 import { account, databases } from '../../appwrite/config';
+import { Query } from 'appwrite';
+
+const DATABASE_ID = 'cargo-car-rental';
+const BOOKINGS_COLLECTION_ID = 'bookings';
 
 const BookingManager = ({ user, onUpdateBookings }) => {
   const [bookings, setBookings] = useState([]);
@@ -9,8 +13,10 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [vehicleAvailability, setVehicleAvailability] = useState({});
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentBooking, setPaymentBooking] = useState(null);
 
-  // Load user bookings
+  // Always fetch bookings from DB for this user
   useEffect(() => {
     loadBookings();
   }, [user]);
@@ -18,23 +24,19 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const loadBookings = async () => {
     try {
       setLoading(true);
-      
-      // Load from user preferences (quick access)
-      const userData = await account.get();
-      const userBookings = userData.prefs?.bookings || [];
-      
-      // Sort by creation date (newest first)
-      const sortedBookings = userBookings.sort((a, b) => 
-        new Date(b.createdAt) - new Date(a.createdAt)
+      setError('');
+      // Fetch bookings from DB for this user, newest first
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        BOOKINGS_COLLECTION_ID,
+        [
+          Query.equal('userId', user.$id),
+          Query.orderDesc('createdAt')
+        ]
       );
-      
-      setBookings(sortedBookings);
-      
-      // Load availability status for each vehicle
-      await loadVehicleAvailability(sortedBookings);
-      
+      setBookings(response.documents);
+      await loadVehicleAvailability(response.documents);
     } catch (error) {
-      console.error('Error loading bookings:', error);
       setError('Failed to load bookings');
     } finally {
       setLoading(false);
@@ -44,31 +46,23 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const loadVehicleAvailability = async (bookings) => {
     try {
       const availability = {};
-      
-      // Get unique vehicle IDs from bookings
       const vehicleIds = [...new Set(bookings.map(booking => booking.vehicleId))];
-      
-      // Fetch availability for each vehicle
       for (const vehicleId of vehicleIds) {
         if (vehicleId) {
           try {
             const vehicle = await databases.getDocument(
-              process.env.REACT_APP_DATABASE_ID,
-              process.env.REACT_APP_VEHICLES_COLLECTION_ID,
+              DATABASE_ID,
+              'vehicles',
               vehicleId
             );
             availability[vehicleId] = vehicle.available;
-          } catch (error) {
-            console.error(`Error loading availability for vehicle ${vehicleId}:`, error);
+          } catch {
             availability[vehicleId] = false;
           }
         }
       }
-      
       setVehicleAvailability(availability);
-    } catch (error) {
-      console.error('Error loading vehicle availability:', error);
-    }
+    } catch {}
   };
 
   const getAvailabilityStatus = (vehicleId, bookingStatus) => {
@@ -123,39 +117,67 @@ const BookingManager = ({ user, onUpdateBookings }) => {
     }
 
     try {
-      // Update booking status in user preferences
-      const userData = await account.get();
-      const userBookings = userData.prefs?.bookings || [];
-      const updatedBookings = userBookings.map(booking => 
-        booking.id === bookingId 
-          ? { ...booking, status: 'cancelled', updatedAt: new Date().toISOString() }
-          : booking
+      await databases.updateDocument(
+        DATABASE_ID,
+        BOOKINGS_COLLECTION_ID,
+        bookingId,
+        { status: 'cancelled', updatedAt: new Date().toISOString() }
       );
-
-      await account.updatePrefs({
-        ...userData.prefs,
-        bookings: updatedBookings
-      });
-
-      // Update local state
-      setBookings(updatedBookings);
-      
-      // Reload availability after cancellation
-      await loadVehicleAvailability(updatedBookings);
-
-      // Notify parent component
-      if (onUpdateBookings) {
-        onUpdateBookings(updatedBookings);
-      }
-
+      await loadBookings();
+      if (onUpdateBookings) onUpdateBookings();
     } catch (error) {
-      console.error('Error cancelling booking:', error);
       setError('Failed to cancel booking');
     }
   };
 
+  const handleRemoveBooking = async (bookingId) => {
+    if (!confirm('Remove this booking from your history? This cannot be undone.')) {
+      return;
+    }
+    try {
+      await databases.deleteDocument(
+        DATABASE_ID,
+        BOOKINGS_COLLECTION_ID,
+        bookingId
+      );
+      await loadBookings();
+      if (onUpdateBookings) onUpdateBookings();
+    } catch (error) {
+      setError('Failed to remove booking');
+    }
+  };
+
   const handleViewDetails = (booking) => {
-    setSelectedBooking(booking);
+    // Map DB fields to modal fields for display
+    setSelectedBooking({
+      id: booking.$id,
+      vehicleName: booking.vehicleMake && booking.vehicleModel
+        ? `${booking.vehicleMake} ${booking.vehicleModel}`
+        : booking.vehicleName || '',
+      vehicleType: booking.vehicleType,
+      vehicleId: booking.vehicleId,
+      pickupDate: booking.pickupDate,
+      returnDate: booking.returnDate,
+      pickupLocation: booking.pickupLocation,
+      returnLocation: booking.returnLocation,
+      status: booking.status,
+      totalCost: booking.totalCost,
+      createdAt: booking.createdAt,
+      updatedAt: booking.updatedAt,
+      specialRequests: booking.specialRequests,
+      driverRequired: booking.driverRequired,
+      emergencyContact: booking.emergencyContact,
+      emergencyPhone: booking.emergencyPhone,
+      numberOfDays: booking.numberOfDays,
+      pricePerDay: booking.pricePerDay,
+      paymentFieldId: booking.paymentFieldId,
+      paymentFieldUrl: booking.paymentFieldUrl,
+      paymentFileName: booking.paymentFileName,
+      userName: booking.userName,
+      userEmail: booking.userEmail,
+      userId: booking.userId,
+      // Add any other fields you want to show
+    });
     setShowDetailsModal(true);
   };
   const formatDate = (dateString) => {
@@ -226,7 +248,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
       ) : (
         <div className="space-y-4">
           {bookings.map((booking) => (
-            <div key={booking.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div key={booking.$id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
                 <div className="flex-1">
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">
@@ -249,13 +271,6 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     {getStatusIcon(booking.status)}
                     <span className="capitalize">{booking.status}</span>
                   </span>
-                  
-                  {getAvailabilityStatus(booking.vehicleId, booking.status) && (
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getAvailabilityStatus(booking.vehicleId, booking.status).color}`}>
-                      {getAvailabilityStatus(booking.vehicleId, booking.status).text}
-                    </span>
-                  )}
-                  
                   <div className="flex space-x-2">
                     <button 
                       onClick={() => handleViewDetails(booking)}
@@ -264,15 +279,37 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     >
                       <Eye size={16} />
                     </button>
-                    
+                    {/* Remove from History always available */}
+                    <button
+                      onClick={() => handleRemoveBooking(booking.id)}
+                      className="text-gray-400 hover:text-gray-700 p-1"
+                      title="Remove from History"
+                    >
+                      <X size={16} />
+                    </button>
                     {booking.status === 'pending' && (
-                      <button 
-                        onClick={() => handleCancelBooking(booking.id)}
-                        className="text-red-600 hover:text-red-800 p-1"
-                        title="Cancel Booking"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <>
+                        <button 
+                          onClick={() => handleCancelBooking(booking.id)}
+                          className="text-red-600 hover:text-red-800 p-1"
+                          title="Cancel Booking"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        {/* Pay Now button, only if not paid */}
+                        {!booking.paid && (
+                          <button
+                            onClick={() => {
+                              setPaymentBooking(booking);
+                              setShowPaymentModal(true);
+                            }}
+                            className="text-green-600 hover:text-green-800 p-1"
+                            title="Pay Now"
+                          >
+                          
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -318,14 +355,33 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                   </span>
                 </div>
 
+                {/* User Info */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                    <User size={16} className="mr-2" />
+                    User Information
+                  </h4>
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Name:</span> {selectedBooking.userName}</div>
+                    <div><span className="font-medium">Email:</span> {selectedBooking.userEmail}</div>
+                    <div><span className="font-medium">User ID:</span> {selectedBooking.userId}</div>
+                  </div>
+                </div>
+
                 {/* Vehicle Information */}
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
                     <Car size={20} className="mr-2" />
                     Vehicle Information
                   </h4>
-                  <p className="text-lg font-medium">{selectedBooking.vehicleName}</p>
-                </div>                {/* Booking Dates & Times */}
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Vehicle:</span> {selectedBooking.vehicleName}</div>
+                    <div><span className="font-medium">Type:</span> {selectedBooking.vehicleType}</div>
+                    <div><span className="font-medium">Vehicle ID:</span> {selectedBooking.vehicleId}</div>
+                  </div>
+                </div>
+
+                {/* Booking Dates & Times */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h5 className="font-medium text-gray-800 mb-2 flex items-center">
@@ -359,12 +415,75 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                   </div>
                 </div>
 
+                {/* Emergency Contact */}
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-800 mb-2 flex items-center">
+                    <Phone size={16} className="mr-2" />
+                    Emergency Contact
+                  </h4>
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Name:</span> {selectedBooking.emergencyContact}</div>
+                    <div><span className="font-medium">Phone:</span> {selectedBooking.emergencyPhone}</div>
+                  </div>
+                </div>
+
+                {/* Special Requests & Driver */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-800 mb-2">Other Details</h4>
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Special Requests:</span> {selectedBooking.specialRequests || '-'}</div>
+                    <div><span className="font-medium">Driver Required:</span> {selectedBooking.driverRequired ? 'Yes' : 'No'}</div>
+                  </div>
+                </div>
+
                 {/* Cost Breakdown */}
                 <div className="bg-green-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-gray-800 mb-3">Cost Summary</h4>
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total Cost:</span>
-                    <span className="text-green-600">₱{selectedBooking.totalCost?.toLocaleString()}</span>
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Price per Day:</span> ₱{selectedBooking.pricePerDay?.toLocaleString()}</div>
+                    <div><span className="font-medium">Number of Days:</span> {selectedBooking.numberOfDays}</div>
+                    <div><span className="font-medium">Total Cost:</span> <span className="text-green-600 font-bold">₱{selectedBooking.totalCost?.toLocaleString()}</span></div>
+                  </div>
+                </div>
+
+                {/* Payment Info */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-800 mb-2">Payment</h4>
+                  <div className="text-sm text-gray-700">
+                    <div>
+                      <span className="font-medium">Payment File Name:</span> {selectedBooking.paymentFileName || '-'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Payment Proof:</span>{' '}
+                      {selectedBooking.paymentFieldId ? (
+                        <a
+                          href={`https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${selectedBooking.paymentFieldId}/view?project=685682ba00095008cb7d`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline"
+                        >
+                          <img
+                            src={`https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${selectedBooking.paymentFieldId}/view?project=685682ba00095008cb7d`}
+                            alt="Payment Proof"
+                            className="h-16 w-16 object-cover rounded border inline-block mr-2"
+                            style={{ background: '#f3f4f6' }}
+                            onError={e => { e.target.style.display = 'none'; }}
+                          />
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-400">No Image</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timestamps */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-800 mb-2">Timestamps</h4>
+                  <div className="text-sm text-gray-700">
+                    <div><span className="font-medium">Created At:</span> {formatDateTime(selectedBooking.createdAt)}</div>
+                    <div><span className="font-medium">Updated At:</span> {formatDateTime(selectedBooking.updatedAt)}</div>
                   </div>
                 </div>
 
@@ -376,7 +495,6 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                   >
                     Close
                   </button>
-                  
                   {selectedBooking.status === 'pending' && (
                     <button 
                       onClick={() => {
@@ -393,6 +511,33 @@ const BookingManager = ({ user, onUpdateBookings }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && paymentBooking && (
+        <Payment
+          booking={paymentBooking}
+          user={user}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPaymentBooking(null);
+          }}
+          onPaymentSuccess={async (updatedBooking) => {
+            // Mark booking as paid in user prefs
+            const userData = await account.get();
+            const userBookings = userData.prefs?.bookings || [];
+            const newBookings = userBookings.map(b =>
+              b.id === updatedBooking.id ? { ...b, paid: true } : b
+            );
+            await account.updatePrefs({
+              ...userData.prefs,
+              bookings: newBookings
+            });
+            setBookings(newBookings);
+            setShowPaymentModal(false);
+            setPaymentBooking(null);
+          }}
+        />
       )}
     </div>
   );

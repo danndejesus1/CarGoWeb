@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, User, Phone, Mail, Car, X, Check, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Phone, Mail, Car, X, Check, AlertTriangle, UploadCloud, Image as ImageIcon, CheckCircle } from 'lucide-react';
 import { account, databases } from '../../appwrite/config';
 import { ID, Permission, Role, Query } from 'appwrite';
 import dayjs from 'dayjs';
@@ -7,6 +7,7 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { uploadFile, FILE_CATEGORIES } from '../../appwrite/fileManager';
 
 // Initialize dayjs plugins
 dayjs.extend(isSameOrBefore);
@@ -40,6 +41,13 @@ const BookingModal = ({
   const [conflictingBookings, setConflictingBookings] = useState([]);
   const [disabledDates, setDisabledDates] = useState([]);
   const [loadingDisabledDates, setLoadingDisabledDates] = useState(false);
+  // Payment-related state
+  const [qrFile, setQrFile] = useState(null);
+  const [qrPreview, setQrPreview] = useState(null);
+  const [paymentUploading, setPaymentUploading] = useState(false);
+  const [paymentFileId, setPaymentFileId] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentFieldUrl, setPaymentFieldUrl] = useState('');
 
   // Load disabled dates when component mounts or vehicle changes
   useEffect(() => {
@@ -267,15 +275,19 @@ const BookingModal = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateBooking()) {
       return;
     }
-    
+    if (!paymentFileId) {
+      setPaymentError('Please upload your payment QR code before confirming booking.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
-    try {      // Create booking document for database (only use existing attributes)
+    try {
       const bookingDoc = {
         userId: user.$id,
         userName: user.name,
@@ -292,7 +304,7 @@ const BookingModal = ({
         returnLocation: bookingData.returnLocation,
         // Additional services
         driverRequired: bookingData.driverRequired,
-        specialRequests: bookingData.specialRequests || '', // Handle empty string
+        specialRequests: bookingData.specialRequests || '',
         // Emergency contact
         emergencyContact: bookingData.emergencyContact,
         emergencyPhone: bookingData.emergencyPhone,
@@ -303,7 +315,11 @@ const BookingModal = ({
         status: 'pending',
         // Required timestamps (DateTime format for Appwrite)
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        // Payment fields matching your schema
+        paymentFieldId: paymentFileId, // Appwrite file ID (string)
+        paymentFieldUrl: paymentFieldUrl.slice(0, 100), // Ensure <= 100 chars
+        paymentFileName: qrFile?.name?.slice(0, 100) || ''
       };// Save to Appwrite database FIRST
       console.log('Saving to database...');
       console.log('Database ID:', 'cargo-car-rental');
@@ -329,7 +345,7 @@ const BookingModal = ({
       
       // Add new booking with database ID
       userBookings.push({
-        id: dbResponse.$id, // Use database document ID
+        id: dbResponse.$id,
         vehicleId: selectedVehicle.id,
         vehicleName: `${selectedVehicle.make} ${selectedVehicle.model}`,
         pickupDate: bookingDoc.pickupDate,
@@ -343,7 +359,11 @@ const BookingModal = ({
         status: 'pending',
         totalCost: totalCost,
         numberOfDays: numberOfDays,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        // Payment fields matching your schema
+        paymentFieldId: paymentFileId,
+        paymentFieldUrl: paymentFieldUrl.slice(0, 100),
+        paymentFileName: qrFile?.name?.slice(0, 100) || ''
       });
 
       await account.updatePrefs({
@@ -380,6 +400,66 @@ const BookingModal = ({
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  // Payment handlers (refactored to match vehicle image upload)
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    setQrFile(file);
+    setPaymentError('');
+    setPaymentFileId('');
+    setQrPreview(null);
+    setPaymentFieldUrl('');
+
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setPaymentError('Please select a valid image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setPaymentError('Image size should be less than 5MB');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => setQrPreview(reader.result);
+    reader.readAsDataURL(file);
+
+    setPaymentUploading(true);
+    try {
+      // Use uploadFile from fileManager.js for payment proof, same as vehicle image
+      const uploadResult = await uploadFile(
+        file,
+        FILE_CATEGORIES.PAYMENT_PROOF,
+        user.$id,
+        selectedVehicle?.id || 'booking'
+      );
+      if (!uploadResult.success) {
+        setPaymentError('Failed to upload payment QR: ' + uploadResult.error);
+        setPaymentFileId('');
+        setPaymentFieldUrl('');
+      } else {
+        setPaymentFileId(uploadResult.fileId);
+        // Store the Appwrite file view URL, but ensure it's <= 100 chars
+        const bucketId = 'cargo-files';
+        const projectId = '685682ba00095008cb7d';
+        const url = `https://fra.cloud.appwrite.io/v1/storage/buckets/${bucketId}/files/${uploadResult.fileId}/view?project=${projectId}`;
+        setPaymentFieldUrl(url.length > 100 ? url.slice(0, 100) : url);
+        // Also update qrFile to reflect the organized file name
+        setQrFile(new File([file], uploadResult.fileName, { type: file.type, lastModified: file.lastModified }));
+      }
+    } catch (err) {
+      setPaymentError('Payment upload failed: ' + (err.message || err));
+      setPaymentFileId('');
+      setPaymentFieldUrl('');
+    } finally {
+      setPaymentUploading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -519,8 +599,8 @@ const BookingModal = ({
                   </div>
                 ) : availabilityStatus === 'available' ? (
                   <div className="flex items-center space-x-2">
-                    <Check size={16} className="text-green-600" />
-                    <span className="text-sm text-green-800 font-medium">Vehicle is available for selected dates</span>
+                      <Check size={16} className="text-green-600" />
+                      <span className="text-sm text-green-800 font-medium">Vehicle is available for selected dates</span>
                   </div>
                 ) : availabilityStatus === 'unavailable' ? (
                   <div>
@@ -677,6 +757,50 @@ const BookingModal = ({
               </div>
             )}
 
+            {/* Payment QR Upload (before submit) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload Payment QR Code <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center space-x-3">
+                <label className="flex items-center px-3 py-2 bg-gray-100 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-200">
+                  <UploadCloud size={20} className="mr-2 text-blue-600" />
+                  <span className="text-sm text-blue-700">Choose Image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+                {qrFile && (
+                  <span className="text-xs text-gray-600">{qrFile.name}</span>
+                )}
+                {paymentUploading && (
+                  <span className="text-xs text-blue-600">Uploading...</span>
+                )}
+                {paymentFileId && (
+                  <span className="text-xs text-green-600">Uploaded</span>
+                )}
+              </div>
+              {qrPreview && (
+                <div className="mt-3">
+                  <div className="text-xs text-gray-500 mb-1 flex items-center">
+                    <ImageIcon size={14} className="mr-1" />
+                    Preview:
+                  </div>
+                  <img
+                    src={qrPreview}
+                    alt="QR Preview"
+                    className="w-40 h-40 object-contain border rounded shadow"
+                  />
+                </div>
+              )}
+              {paymentError && (
+                <div className="text-xs text-red-500 mt-2">{paymentError}</div>
+              )}
+            </div>
+
             {/* Action Buttons */}
             <div className="flex space-x-3 pt-4">
               <button 
@@ -692,7 +816,9 @@ const BookingModal = ({
                   loading || 
                   numberOfDays === 0 || 
                   availabilityStatus === 'unavailable' || 
-                  checkingAvailability
+                  checkingAvailability ||
+                  paymentUploading ||
+                  !paymentFileId
                 }
                 className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-300 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -703,8 +829,8 @@ const BookingModal = ({
                     <Check size={16} />
                     <span>
                       {availabilityStatus === 'unavailable' ? 'Not Available' : 
-                       checkingAvailability ? 'Checking...' :
-                       `Confirm Booking (₱${totalCost.toLocaleString()})`}
+                        checkingAvailability ? 'Checking...' :
+                        `Confirm Booking (₱${totalCost.toLocaleString()})`}
                     </span>
                   </>
                 )}

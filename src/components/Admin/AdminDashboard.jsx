@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut, Package, Truck, Users, DollarSign, Plus, Eye, Settings, BarChart3, Car, Edit, Trash2, X, Upload } from 'lucide-react';
 import { databases, storage } from '../../appwrite/config';
-import { ID } from 'appwrite';
+import { ID, Query } from 'appwrite';
 import { uploadFile, getFilePreview } from '../../appwrite/fileManager';
+import AdminBookings from './AdminBookings';
 
 const AdminDashboard = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -12,6 +13,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  // Add bookings state
+  const [bookings, setBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
   // Simple function to get direct file URL
   const getDirectFileUrl = (fileId) => {
     if (!fileId) return null;
@@ -88,6 +92,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     loadVehicles();
   }, []);
+  // Load vehicles from database
   const loadVehicles = async () => {
     try {
       setLoading(true);
@@ -283,6 +288,20 @@ const AdminDashboard = () => {
     }
   };
 
+  // Helper for formatting date/time
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 z-50 overflow-y-auto">
       <div className="admin-dashboard min-h-screen">
@@ -394,6 +413,16 @@ const AdminDashboard = () => {
               >
                 Manage Vehicles
               </button>
+              <button 
+                onClick={() => setActiveSection('bookings')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeSection === 'bookings' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                View All Bookings
+              </button>
             </div>
 
             {activeSection === 'dashboard' && (
@@ -407,7 +436,6 @@ const AdminDashboard = () => {
                     <Plus className="h-5 w-5" />
                     <span className="font-medium">Add New Vehicle</span>
                   </button>
-                  
                   <button 
                     onClick={() => setActiveSection('vehicles')}
                     className="flex items-center space-x-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1"
@@ -415,12 +443,13 @@ const AdminDashboard = () => {
                     <Car className="h-5 w-5" />
                     <span className="font-medium">Manage Vehicles</span>
                   </button>
-                  
-                  <button className="flex items-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1">
+                  <button 
+                    onClick={() => setActiveSection('bookings')}
+                    className="flex items-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1"
+                  >
                     <Eye className="h-5 w-5" />
                     <span className="font-medium">View All Bookings</span>
                   </button>
-                  
                   <button className="flex items-center space-x-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1">
                     <BarChart3 className="h-5 w-5" />
                     <span className="font-medium">Generate Report</span>
@@ -433,7 +462,7 @@ const AdminDashboard = () => {
               <div>
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-bold text-gray-900">Vehicle Management</h3>
-                  <button 
+                  <button
                     onClick={() => setShowAddVehicleModal(true)}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
                   >
@@ -441,13 +470,11 @@ const AdminDashboard = () => {
                     <span>Add Vehicle</span>
                   </button>
                 </div>
-
                 {error && (
                   <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
                     {error}
                   </div>
                 )}
-
                 {loading ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -456,7 +483,8 @@ const AdminDashboard = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {vehicles.map((vehicle) => (
-                      <div key={vehicle.$id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">                        <div className="relative mb-4">
+                      <div key={vehicle.$id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="relative mb-4">
                           <VehicleImage vehicle={vehicle} />
                           
                           <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${
@@ -517,7 +545,12 @@ const AdminDashboard = () => {
                     )}
                   </div>
                 )}
+                {/* Bookings table removed from here */}
               </div>
+            )}
+
+            {activeSection === 'bookings' && (
+              <AdminBookings />
             )}
           </div>
 
@@ -831,26 +864,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-
-/*
-After you add the missing attributes (imageUrl, description, createdAt, updatedAt) to your database,
-replace the vehicleData object with this complete version:
-
-const vehicleData = {
-  make: vehicleForm.make,
-  model: vehicleForm.model,
-  type: vehicleForm.type,
-  gasType: vehicleForm.gasType,
-  seatingCapacity: vehicleForm.seatingCapacity,
-  pricePerDay: vehicleForm.pricePerDay,
-  imageUrl: vehicleForm.imageUrl || '',
-  imageFileId: vehicleForm.imageFileId || '',
-  imageFileName: vehicleForm.imageFileName || '',
-  description: vehicleForm.description || '',
-  available: vehicleForm.available,
-  ...(editingVehicle ? 
-    { updatedAt: new Date() } : 
-    { createdAt: new Date(), updatedAt: new Date() }
-  )
-};
-*/
+                      
