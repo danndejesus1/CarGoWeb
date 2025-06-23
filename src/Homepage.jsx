@@ -7,6 +7,7 @@ import Register from './components/Register';
 import Account from './components/Account';
 import BookingModal from './components/User/BookingModal';
 import VehicleFilters from './components/VehicleFilters';
+import ContactForm from './components/User/ContactForm'; // <-- Add this import
 import './App.css';
 
 const HomePage = () => {
@@ -20,12 +21,6 @@ const HomePage = () => {
   const [bookings, setBookings] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [contactForm, setContactForm] = useState({
-    name: '',
-    email: '',
-    message: ''
-  });
-  const [contactMessage, setContactMessage] = useState('');
   const [activeSection, setActiveSection] = useState('home');
 
   // Function to get direct file URL (same as admin dashboard)
@@ -240,16 +235,7 @@ const HomePage = () => {
     alert('Booking confirmed! You can view your booking in the Account section.');
   };
 
-  // Handle contact form
-  const handleContactSubmit = (e) => {
-    e.preventDefault();
-    // Simulate API call
-    setTimeout(() => {
-      setContactMessage('Thank you for your message! We will get back to you soon.');
-      setContactForm({ name: '', email: '', message: '' });
-      setTimeout(() => setContactMessage(''), 5000);
-    }, 500);
-  };  // Handle logout
+  // Handle logout
   const handleLogout = async () => {
     try {
       await account.deleteSessions();
@@ -408,13 +394,24 @@ const HomePage = () => {
             <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
               <Calendar className="h-10 w-10 text-blue-600" />
             </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-3">Flexible Booking</h3>
-            <p className="text-gray-600">
+            {/* Make the whole card clickable, styled like Contact Us card */}
+            <h3 className="text-xl font-bold text-gray-800 mb-3">Click to Book Now</h3>
+            <p
+              className="text-gray-600 cursor-pointer"
+              onClick={() => setActiveSection('vehicles')}
+              tabIndex={0}
+              role="button"
+              aria-label="Book Vehicles"
+              onKeyPress={e => {
+                if (e.key === 'Enter' || e.key === ' ') setActiveSection('vehicles');
+              }}
+            >
               Book online in minutes with our easy-to-use platform. Enjoy flexible pickup and return options,
               with the ability to modify or cancel your reservation as needed.
             </p>
           </div>
           
+          {/* Contact Us informative card */}
           <div
             className="bg-white rounded-lg shadow-md p-6 text-center cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => setActiveSection('contact')}
@@ -613,58 +610,6 @@ const HomePage = () => {
     </section>
   );
 
-  // Contact section
-  const ContactSection = () => (
-    <section className="py-16 px-4 bg-white min-h-screen">
-      <div className="container mx-auto">
-        <h2 className="text-3xl font-bold text-center text-gray-800 mb-10">Get In Touch</h2>
-        <div className="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
-          <form onSubmit={handleContactSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input 
-                type="text"
-                value={contactForm.name}
-                onChange={(e) => setContactForm({...contactForm, name: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input 
-                type="email"
-                value={contactForm.email}
-                onChange={(e) => setContactForm({...contactForm, email: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-              <textarea 
-                value={contactForm.message}
-                onChange={(e) => setContactForm({...contactForm, message: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 h-32"
-                required
-              ></textarea>
-            </div>
-            <button 
-              type="submit"
-              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition duration-300 font-semibold"
-            >
-              Send Message
-            </button>
-          </form>
-          {contactMessage && (
-            <div className="mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-md text-center">
-              {contactMessage}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
   // Account section
   const AccountSection = () => (
     <Account 
@@ -711,7 +656,7 @@ const HomePage = () => {
       )}
       
       {activeSection === 'vehicles' && <VehiclesSection />}
-      {activeSection === 'contact' && <ContactSection />}
+      {activeSection === 'contact' && <ContactForm />} {/* Show ContactForm when Contact tab is active */}
       {activeSection === 'account' && isLoggedIn && <AccountSection />}
       <Footer />
       <BookingModalComponent />

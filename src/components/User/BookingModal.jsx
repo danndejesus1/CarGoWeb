@@ -560,7 +560,7 @@ const BookingModal = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <Clock size={16} className="inline mr-1" />
-                  Pickup Time
+                  Pickup Time*
                 </label>
                 <input
                   type="time"
@@ -573,7 +573,7 @@ const BookingModal = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <Clock size={16} className="inline mr-1" />
-                  Return Time
+                  Return Time*
                 </label>
                 <input
                   type="time"

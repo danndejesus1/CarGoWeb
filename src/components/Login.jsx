@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { account } from '../appwrite/config';
+import { account, databases } from '../appwrite/config'; // Add this import
 import { LogIn, Eye, EyeOff, X } from 'lucide-react';
 import AdminDashboard from './Admin/AdminDashboard';
 import StaffBookings from './Staff/StaffBookings'; // Import StaffBookings
+
+const DB_ID = 'cargo-car-rental';
+const USERS_COLLECTION_ID = 'users';
 
 const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
   const [formData, setFormData] = useState({
@@ -70,6 +73,24 @@ const Login = ({ onLogin, switchToRegister, onClose, onAdminLogin }) => {
     try {
       const session = await account.createEmailPasswordSession(formData.email, formData.password);
       const user = await account.get();
+
+      // Fetch user document from your users collection
+      let userDoc;
+      try {
+        userDoc = await databases.getDocument(DB_ID, USERS_COLLECTION_ID, user.$id);
+        if (userDoc && userDoc.status === false) {
+          // Disable login for disabled users
+          await account.deleteSession('current');
+          setError('Your account has been disabled. Please contact support.');
+          setLoading(false);
+          return;
+        }
+      } catch (fetchErr) {
+        setError('Unable to verify user status. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       onLogin(user);
     } catch (error) {
       setError(error.message || 'Login failed. Please try again.');

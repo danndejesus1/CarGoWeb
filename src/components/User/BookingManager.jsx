@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X, User } from 'lucide-react';
+import { Calendar, MapPin, Phone, Mail, Car, Eye, Edit2, Trash2, CheckCircle, XCircle, AlertCircle, X, User, Star } from 'lucide-react';
 import { account, databases } from '../../appwrite/config';
 import { Query } from 'appwrite';
 import jsPDF from 'jspdf';
@@ -7,6 +7,7 @@ import html2canvas from 'html2canvas';
 
 const DATABASE_ID = 'cargo-car-rental';
 const BOOKINGS_COLLECTION_ID = 'bookings';
+const RATINGS_COLLECTION_ID = 'ratings';
 
 const BookingManager = ({ user, onUpdateBookings }) => {
   const [bookings, setBookings] = useState([]);
@@ -17,11 +18,15 @@ const BookingManager = ({ user, onUpdateBookings }) => {
   const [vehicleAvailability, setVehicleAvailability] = useState({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentBooking, setPaymentBooking] = useState(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingBooking, setRatingBooking] = useState(null);
+  const [userRatings, setUserRatings] = useState({});
   const detailsRef = useRef(null);
 
   // Always fetch bookings from DB for this user
   useEffect(() => {
     loadBookings();
+    loadUserRatings();
   }, [user]);
 
   const loadBookings = async () => {
@@ -45,6 +50,23 @@ const BookingManager = ({ user, onUpdateBookings }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadUserRatings = async () => {
+    try {
+      // Fetch all ratings by this user
+      const res = await databases.listDocuments(
+        DATABASE_ID,
+        RATINGS_COLLECTION_ID,
+        [Query.equal('userId', user.$id)]
+      );
+      // Map bookingId -> rating
+      const ratingsMap = {};
+      res.documents.forEach(r => {
+        ratingsMap[r.bookingId] = r;
+      });
+      setUserRatings(ratingsMap);
+    } catch {}
   };
 
   const loadVehicleAvailability = async (bookings) => {
@@ -434,6 +456,42 @@ const BookingManager = ({ user, onUpdateBookings }) => {
     pdf.save(`CarGo-Receipt-${selectedBooking.id}.pdf`);
   };
 
+  // Add this function before the return (
+  const handleSubmitRating = async ({ bookingId, vehicleId, stars, comment }) => {
+    try {
+      // Ensure stars is an integer between 1 and 5
+      const safeStars = Math.max(1, Math.min(5, parseInt(stars, 10)));
+      await databases.createDocument(
+        DATABASE_ID,
+        RATINGS_COLLECTION_ID,
+        'unique()',
+        {
+          bookingId,
+          userId: user.$id,
+          vehicleId,
+          stars: safeStars,
+          comment,
+          createdAt: new Date().toISOString()
+        }
+      );
+      // Update booking status to completed
+      await databases.updateDocument(
+        DATABASE_ID,
+        BOOKINGS_COLLECTION_ID,
+        bookingId,
+        { status: 'completed', updatedAt: new Date().toISOString() }
+      );
+      setShowRatingModal(false);
+      setRatingBooking(null);
+      await loadBookings();
+      await loadUserRatings();
+    } catch (e) {
+      // Log the error details for debugging
+      console.error('Failed to submit rating:', e);
+      alert('Failed to submit rating. ' + (e?.message || ''));
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -546,6 +604,27 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                 <span className="text-lg font-bold text-green-600">
                   ₱{booking.totalCost?.toLocaleString()}
                 </span>
+                {/* Rating button for confirmed bookings not yet rated */}
+                {booking.status === 'confirmed' && !userRatings[booking.$id] && (
+                  <button
+                    className="ml-4 flex items-center text-yellow-500 hover:text-yellow-600 text-sm"
+                    onClick={() => {
+                      setRatingBooking(booking);
+                      setShowRatingModal(true);
+                    }}
+                  >
+                    <Star size={18} className="mr-1" />
+                    Rate
+                  </button>
+                )}
+                {/* Show stars if already rated (now completed) */}
+                {booking.status === 'completed' && userRatings[booking.$id] && (
+                  <span className="ml-4 flex items-center text-yellow-500">
+                    {[...Array(userRatings[booking.$id].stars)].map((_, i) => (
+                      <Star key={i} size={16} fill="currentColor" stroke="none" />
+                    ))}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -767,8 +846,82 @@ const BookingManager = ({ user, onUpdateBookings }) => {
           }}
         />
       )}
+
+      {/* Rating Modal */}
+      {showRatingModal && ratingBooking && (
+        <RatingModal
+          booking={ratingBooking}
+          onClose={() => {
+            setShowRatingModal(false);
+            setRatingBooking(null);
+          }}
+          onSubmit={async (stars, comment) => {
+            await handleSubmitRating({
+              bookingId: ratingBooking.$id,
+              vehicleId: ratingBooking.vehicleId,
+              stars,
+              comment
+            });
+          }}
+        />
+      )}
     </div>
   );
 };
+
+// Add this RatingModal component at the bottom of the file
+function RatingModal({ booking, onClose, onSubmit }) {
+  const [stars, setStars] = useState(5);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-sm w-full p-6">
+        <h3 className="text-lg font-bold mb-4 text-gray-800">Rate Your Booking</h3>
+        <div className="flex items-center mb-4">
+          {[1,2,3,4,5].map(i => (
+            <button
+              key={i}
+              type="button"
+              className={`mx-1 ${i <= stars ? 'text-yellow-500' : 'text-gray-300'}`}
+              onClick={() => setStars(i)}
+              aria-label={`Rate ${i} star${i > 1 ? 's' : ''}`}
+            >
+              <Star size={28} fill={i <= stars ? 'currentColor' : 'none'} />
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="w-full border rounded p-2 mb-4"
+          rows={3}
+          placeholder="Leave a comment (optional)"
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+        />
+        <div className="flex space-x-2">
+          <button
+            className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            disabled={submitting}
+            onClick={async () => {
+              setSubmitting(true);
+              await onSubmit(stars, comment);
+              setSubmitting(false);
+            }}
+          >
+            Submit
+          </button>
+          <button
+            className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default BookingManager;

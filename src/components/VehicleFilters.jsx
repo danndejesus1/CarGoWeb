@@ -377,7 +377,7 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
         )}
         {inputValues.make && (
           <span className="inline-flex items-center bg-gray-100 text-gray-800 px-2 py-1 rounded">
-            Make: {inputValues.make}
+            Brand: {inputValues.make}
             <button 
               onClick={() => handleMakeChange('')}
               className="ml-1 text-gray-500 hover:text-gray-700"

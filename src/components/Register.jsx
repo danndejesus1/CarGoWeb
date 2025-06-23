@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { account, storage, STORAGE_BUCKET_ID } from '../appwrite/config';
+import { account, storage, STORAGE_BUCKET_ID, databases } from '../appwrite/config';
 import { uploadFile, validateFile, FILE_CATEGORIES } from '../appwrite/fileManager';
 import { testStorageConnection } from '../appwrite/storageDebug';
 import { UserPlus, Eye, EyeOff, X } from 'lucide-react';
 import { ID } from 'appwrite';
+
+const DB_ID = 'cargo-car-rental'; // Your database ID
+const USERS_COLLECTION_ID = 'users'; // Your users collection ID
 
 const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData, setFormData] = useState({
     firstName: '',
@@ -97,9 +100,9 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
         fullName
       );
 
-      // Step 3: Login the user with new credentials
-      await account.createEmailPasswordSession(formData.email, formData.password);// Step 3: Upload ID file to storage using file manager
+      // Step 3: Upload ID file to storage using file manager
       let uploadResult = null;
+      let profilePicUrl = '';
       if (idFile) {
         // Test storage connection first
         console.log('Testing storage connection...');
@@ -121,7 +124,40 @@ const Register = ({ onRegister, switchToLogin, onClose }) => {  const [formData,
         }
         
         console.log('File uploaded successfully:', uploadResult);
-      }// Step 4: Get user data and add ID file reference
+        
+        if (uploadResult.fileId) {
+          // Store only the fileId in the profilePicUrl field
+          profilePicUrl = uploadResult.fileId;
+        }
+      }
+
+      // --- Add user to database collection ---
+      try {
+        await databases.createDocument(
+          DB_ID,
+          USERS_COLLECTION_ID,
+          user.$id,
+          {
+            firstName: formData.firstName,
+            middleName: formData.middleName,
+            lastName: formData.lastName,
+            emailAdd: formData.email,
+            phoneNumber: formData.phoneNumber,
+            addressLine: formData.addressLine,
+            city: formData.city,
+            status: true,
+            profilePicUrl // This is just the fileId
+          }
+        );
+      } catch (dbErr) {
+        setError('Failed to create user in DB: ' + (dbErr.message || dbErr));
+        console.error('Failed to create user in DB:', dbErr);
+        alert('Failed to create user in DB: ' + (dbErr.message || dbErr));
+      }
+      // --- End add user to database ---
+
+      // Step 3: Login the user with new credentials
+      await account.createEmailPasswordSession(formData.email, formData.password);// Step 4: Get user data and add ID file reference
       const userData = await account.get();
         // Store file information in user preferences
       if (uploadResult && uploadResult.success) {

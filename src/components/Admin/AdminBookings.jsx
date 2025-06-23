@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { databases, storage } from '../../appwrite/config';
 import { Query } from 'appwrite';
-import { Eye, Car, CheckCircle, XCircle } from 'lucide-react'; // Add XCircle for cancel icon
+import { Eye, Car, CheckCircle, XCircle, ChevronDown } from 'lucide-react'; // Add XCircle for cancel icon
 
 // Helper for formatting date/time
 const formatDateTime = (dateString) => {
@@ -106,6 +106,12 @@ const AdminBookings = () => {
   const [updatingId, setUpdatingId] = useState(null);
   const [cancellingId, setCancellingId] = useState(null); // Track cancelling
 
+  // New: search and filter state
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState('desc');
+
   const loadBookings = async () => {
     setLoadingBookings(true);
     setError('');
@@ -162,21 +168,107 @@ const AdminBookings = () => {
     }
   };
 
+  // New: filtered and sorted bookings
+  const filteredBookings = bookings
+    .filter((booking) => {
+      // Status filter
+      if (statusFilter !== 'all' && booking.status !== statusFilter) return false;
+      // Search filter (by user, vehicle, booking id)
+      const searchLower = search.trim().toLowerCase();
+      if (!searchLower) return true;
+      return (
+        (booking.userName && booking.userName.toLowerCase().includes(searchLower)) ||
+        (booking.userEmail && booking.userEmail.toLowerCase().includes(searchLower)) ||
+        (booking.vehicleMake && booking.vehicleMake.toLowerCase().includes(searchLower)) ||
+        (booking.vehicleModel && booking.vehicleModel.toLowerCase().includes(searchLower)) ||
+        (booking.$id && booking.$id.toLowerCase().includes(searchLower))
+      );
+    })
+    .sort((a, b) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+      if (sortBy === 'totalCost') {
+        valA = Number(valA) || 0;
+        valB = Number(valB) || 0;
+      } else if (sortBy === 'createdAt' || sortBy === 'pickupDate' || sortBy === 'returnDate') {
+        valA = new Date(valA).getTime();
+        valB = new Date(valB).getTime();
+      } else {
+        valA = valA || '';
+        valB = valB || '';
+      }
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
   useEffect(() => {
     loadBookings();
   }, []);
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-bold text-gray-900">All Bookings</h3>
-        <button
-          onClick={loadBookings}
-          className="mb-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Eye className="h-4 w-4" />
-          <span>Refresh</span>
-        </button>
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-4">
+        <div>
+          <h3 className="text-xl font-bold text-gray-900">All Bookings</h3>
+        </div>
+        <div className="flex flex-col md:flex-row md:items-center gap-2">
+          {/* Search input */}
+          <input
+            type="text"
+            placeholder="Search by user, vehicle, or ID"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+            style={{ minWidth: 220 }}
+          />
+          {/* Status filter */}
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="completed">Completed</option>
+          </select>
+          {/* Sort by */}
+          <div className="flex items-center border border-gray-300 rounded-md px-2 py-1 bg-white">
+            <label className="mr-2 text-sm text-gray-600">Sort by</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              className="text-sm bg-transparent outline-none"
+            >
+              <option value="createdAt">Created</option>
+              <option value="pickupDate">Pickup</option>
+              <option value="returnDate">Return</option>
+              <option value="totalCost">Total Cost</option>
+              <option value="userName">User Name</option>
+              <option value="vehicleMake">Vehicle</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+              className="ml-1 text-gray-500 hover:text-gray-700"
+              title="Toggle sort direction"
+            >
+              <ChevronDown
+                size={18}
+                className={sortDir === 'desc' ? 'rotate-180 transition-transform' : 'transition-transform'}
+              />
+            </button>
+          </div>
+          <button
+            onClick={loadBookings}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Eye className="h-4 w-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
@@ -206,14 +298,14 @@ const AdminBookings = () => {
               </tr>
             </thead>
             <tbody>
-              {bookings.length === 0 ? (
+              {filteredBookings.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="text-center py-8 text-gray-500">
                     No bookings found.
                   </td>
                 </tr>
               ) : (
-                bookings.map((booking) => {
+                filteredBookings.map((booking) => {
                   const paymentFieldId = booking.paymentFieldId;
                   return (
                     <tr key={booking.$id} className="hover:bg-gray-50">
@@ -273,6 +365,11 @@ const AdminBookings = () => {
                         {booking.status === 'cancelled' && (
                           <span className="text-red-700 font-semibold flex items-center">
                             <XCircle size={16} className="mr-1" /> Cancelled
+                          </span>
+                        )}
+                        {booking.status === 'completed' && (
+                          <span className="text-blue-700 font-semibold flex items-center">
+                            <CheckCircle size={16} className="mr-1" /> Completed
                           </span>
                         )}
                       </td>

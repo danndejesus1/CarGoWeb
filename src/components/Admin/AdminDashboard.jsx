@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Package, Truck, Users, DollarSign, Plus, Eye, Settings, BarChart3, Car, Edit, Trash2, X, Upload } from 'lucide-react';
+import { LogOut, Package, Truck, Users, DollarSign, Plus, Eye, Settings, BarChart3, Car, Edit, Trash2, X, Upload, ChevronDown } from 'lucide-react';
 import { databases, storage } from '../../appwrite/config';
 import { ID, Query } from 'appwrite';
 import { uploadFile, getFilePreview } from '../../appwrite/fileManager';
 import AdminBookings from './AdminBookings';
+import AdminManageUsers from './AdminManageUsers';
+import FeedBackandRatings from './FeedBackandRatings';
+import GenerateReport from './GenerateReport';
+import AdminAnalytics from './AdminAnalytics';
 
 const AdminDashboard = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
@@ -22,11 +26,10 @@ const AdminDashboard = () => {
     return `https://fra.cloud.appwrite.io/v1/storage/buckets/cargo-files/files/${fileId}/view?project=685682ba00095008cb7d`;
   };
 
-  // Simplified Vehicle Image Component
+  // VehicleImage component
   const VehicleImage = ({ vehicle }) => {
     const [showPlaceholder, setShowPlaceholder] = useState(false);
-    
-    // Determine image source priority
+
     const getImageSrc = () => {
       if (vehicle.imageFileId) {
         return getDirectFileUrl(vehicle.imageFileId);
@@ -51,7 +54,7 @@ const AdminDashboard = () => {
     }
 
     return (
-      <img 
+      <img
         src={imageSrc}
         alt={`${vehicle.make} ${vehicle.model}`}
         className="w-full h-32 object-cover rounded-lg"
@@ -68,7 +71,9 @@ const AdminDashboard = () => {
         }}
       />
     );
-  };const [vehicleForm, setVehicleForm] = useState({
+  };
+
+const [vehicleForm, setVehicleForm] = useState({
     make: '',
     model: '',
     type: 'Sedan',
@@ -302,173 +307,211 @@ const AdminDashboard = () => {
     });
   };
 
+  // Vehicle search/filter/sort state
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const [vehicleAvailability, setVehicleAvailability] = useState('all');
+  const [vehicleSortBy, setVehicleSortBy] = useState('make');
+  const [vehicleSortDir, setVehicleSortDir] = useState('asc');
+
+  // Filtered and sorted vehicles
+  const filteredVehicles = vehicles
+    .filter(vehicle => {
+      // Availability filter
+      if (vehicleAvailability === 'available' && !vehicle.available) return false;
+      if (vehicleAvailability === 'unavailable' && vehicle.available) return false;
+      // Search filter (make, model, type)
+      const searchLower = vehicleSearch.trim().toLowerCase();
+      if (!searchLower) return true;
+      return (
+        (vehicle.make && vehicle.make.toLowerCase().includes(searchLower)) ||
+        (vehicle.model && vehicle.model.toLowerCase().includes(searchLower)) ||
+        (vehicle.type && vehicle.type.toLowerCase().includes(searchLower))
+      );
+    })
+    .sort((a, b) => {
+      let valA = a[vehicleSortBy] || '';
+      let valB = b[vehicleSortBy] || '';
+      if (vehicleSortBy === 'pricePerDay') {
+        valA = Number(valA) || 0;
+        valB = Number(valB) || 0;
+      } else if (vehicleSortBy === 'available') {
+        valA = a.available ? 1 : 0;
+        valB = b.available ? 1 : 0;
+      } else {
+        valA = valA.toString().toLowerCase();
+        valB = valB.toString().toLowerCase();
+      }
+      if (valA < valB) return vehicleSortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return vehicleSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 z-50 overflow-y-auto">
-      <div className="admin-dashboard min-h-screen">
-        {/* Header */}
-        <div className="bg-white shadow-lg border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="bg-blue-600 p-2 rounded-lg">
-                  <Package className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">CarGo Admin</h1>
-                  <p className="text-gray-600">Car Rental Management System</p>
-                </div>
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="flex items-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 shadow-md"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </button>
+      <div className="admin-dashboard min-h-screen flex">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col py-8 px-4 min-h-screen">
+          <div className="flex items-center mb-10">
+            <div className="bg-blue-600 p-2 rounded-lg mr-3">
+              <Package className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">CarGo Admin</h1>
+              <p className="text-xs text-gray-500">Dashboard</p>
             </div>
           </div>
-        </div>
+          <nav className="flex-1 space-y-2">
+            <button
+              onClick={() => setActiveSection('dashboard')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'dashboard'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 mr-3" />
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveSection('vehicles')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'vehicles'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <Car className="h-5 w-5 mr-3" />
+              Manage Vehicles
+            </button>
+            <button
+              onClick={() => setActiveSection('bookings')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'bookings'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <Eye className="h-5 w-5 mr-3" />
+              View All Bookings
+            </button>
+            <button
+              onClick={() => setActiveSection('users')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'users'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <Users className="h-5 w-5 mr-3" />
+              Manage Users
+            </button>
+            <button
+              onClick={() => setActiveSection('feedback')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'feedback'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 mr-3" />
+              Feedback and Ratings
+            </button>
+            <button
+              onClick={() => setActiveSection('report')}
+              className={`w-full flex items-center px-4 py-3 rounded-lg text-left font-medium transition-colors ${
+                activeSection === 'report'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 hover:bg-blue-50'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 mr-3" />
+              Generate Report
+            </button>
+          </nav>
+          <div className="mt-auto pt-8">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center space-x-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors duration-200 shadow-md"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </aside>
 
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          {/* Welcome Section */}
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, Admin!</h2>
-            <p className="text-gray-600">Here's what's happening with your cargo rental business today.</p>
+        {/* Main Content */}
+        <main className="flex-1 px-8 py-8">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, Admin!</h2>
+              <p className="text-gray-600">Here's what's happening with your cargo rental business today.</p>
+            </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">Total Cargo</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">24</p>
-                  <p className="text-green-600 text-sm mt-1">+12% from last month</p>
-                </div>
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <Package className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">Active Rentals</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">8</p>
-                  <p className="text-green-600 text-sm mt-1">+3 new today</p>
-                </div>
-                <div className="bg-green-100 p-3 rounded-full">
-                  <Truck className="h-8 w-8 text-green-600" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">Total Users</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">156</p>
-                  <p className="text-blue-600 text-sm mt-1">+8 new this week</p>
-                </div>
-                <div className="bg-purple-100 p-3 rounded-full">
-                  <Users className="h-8 w-8 text-purple-600" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">Monthly Revenue</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">$12,450</p>
-                  <p className="text-green-600 text-sm mt-1">+18% from last month</p>
-                </div>
-                <div className="bg-yellow-100 p-3 rounded-full">
-                  <DollarSign className="h-8 w-8 text-yellow-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-            {/* Navigation Tabs */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100">
-            <div className="flex space-x-4 mb-6">
-              <button 
-                onClick={() => setActiveSection('dashboard')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeSection === 'dashboard' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Dashboard
-              </button>
-              <button 
-                onClick={() => setActiveSection('vehicles')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeSection === 'vehicles' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Manage Vehicles
-              </button>
-              <button 
-                onClick={() => setActiveSection('bookings')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeSection === 'bookings' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                View All Bookings
-              </button>
-            </div>
-
+          {/* Stats Cards and Analytics */}
+          <div>
             {activeSection === 'dashboard' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <button 
-                    onClick={() => setShowAddVehicleModal(true)}
-                    className="flex items-center space-x-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1"
-                  >
-                    <Plus className="h-5 w-5" />
-                    <span className="font-medium">Add New Vehicle</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveSection('vehicles')}
-                    className="flex items-center space-x-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1"
-                  >
-                    <Car className="h-5 w-5" />
-                    <span className="font-medium">Manage Vehicles</span>
-                  </button>
-                  <button 
-                    onClick={() => setActiveSection('bookings')}
-                    className="flex items-center space-x-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1"
-                  >
-                    <Eye className="h-5 w-5" />
-                    <span className="font-medium">View All Bookings</span>
-                  </button>
-                  <button className="flex items-center space-x-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-4 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-1">
-                    <BarChart3 className="h-5 w-5" />
-                    <span className="font-medium">Generate Report</span>
-                  </button>
-                </div>
-              </div>
+              <>
+                <AdminAnalytics />
+              </>
             )}
 
             {activeSection === 'vehicles' && (
               <div>
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-6 gap-4">
                   <h3 className="text-xl font-bold text-gray-900">Vehicle Management</h3>
-                  <button
-                    onClick={() => setShowAddVehicleModal(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Vehicle</span>
-                  </button>
+                  <div className="flex flex-col md:flex-row md:items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Search by make, model, or type"
+                      value={vehicleSearch}
+                      onChange={e => setVehicleSearch(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                      style={{ minWidth: 200 }}
+                    />
+                    <select
+                      value={vehicleAvailability}
+                      onChange={e => setVehicleAvailability(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="all">All</option>
+                      <option value="available">Available</option>
+                      <option value="unavailable">Unavailable</option>
+                    </select>
+                    <div className="flex items-center border border-gray-300 rounded-md px-2 py-1 bg-white">
+                      <label className="mr-2 text-sm text-gray-600">Sort by</label>
+                      <select
+                        value={vehicleSortBy}
+                        onChange={e => setVehicleSortBy(e.target.value)}
+                        className="text-sm bg-transparent outline-none"
+                      >
+                        <option value="make">Make</option>
+                        <option value="model">Model</option>
+                        <option value="type">Type</option>
+                        <option value="pricePerDay">Price</option>
+                        <option value="available">Availability</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setVehicleSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+                        className="ml-1 text-gray-500 hover:text-gray-700"
+                        title="Toggle sort direction"
+                      >
+                        <ChevronDown
+                          size={18}
+                          className={vehicleSortDir === 'desc' ? 'rotate-180 transition-transform' : 'transition-transform'}
+                        />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setShowAddVehicleModal(true)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Vehicle</span>
+                    </button>
+                  </div>
                 </div>
                 {error && (
                   <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
@@ -482,7 +525,7 @@ const AdminDashboard = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {vehicles.map((vehicle) => (
+                    {filteredVehicles.map((vehicle) => (
                       <div key={vehicle.$id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="relative mb-4">
                           <VehicleImage vehicle={vehicle} />
@@ -536,11 +579,11 @@ const AdminDashboard = () => {
                       </div>
                     ))}
 
-                    {vehicles.length === 0 && !loading && (
+                    {filteredVehicles.length === 0 && !loading && (
                       <div className="col-span-full text-center py-12">
                         <Car size={48} className="mx-auto text-gray-400 mb-4" />
-                        <p className="text-gray-600 text-lg mb-2">No vehicles added yet</p>
-                        <p className="text-gray-500 text-sm">Start by adding your first vehicle to the fleet</p>
+                        <p className="text-gray-600 text-lg mb-2">No vehicles found</p>
+                        <p className="text-gray-500 text-sm">Try adjusting your filters or add a new vehicle</p>
                       </div>
                     )}
                   </div>
@@ -552,80 +595,18 @@ const AdminDashboard = () => {
             {activeSection === 'bookings' && (
               <AdminBookings />
             )}
+
+            {activeSection === 'users' && (
+              <AdminManageUsers />
+            )}
+            {activeSection === 'feedback' && (
+              <FeedBackandRatings />
+            )}
+            {activeSection === 'report' && (
+              <GenerateReport />
+            )}
           </div>
-
-          {/* Recent Activity & Performance Overview */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h3>
-              <div className="space-y-4">
-                <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="bg-green-100 p-2 rounded-full">
-                    <Plus className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium">New cargo added</p>
-                    <p className="text-gray-500 text-sm">Large shipping container - 2 hours ago</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="bg-blue-100 p-2 rounded-full">
-                    <Truck className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium">Rental completed</p>
-                    <p className="text-gray-500 text-sm">John Doe returned cargo truck - 4 hours ago</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="bg-purple-100 p-2 rounded-full">
-                    <Users className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium">New user registered</p>
-                    <p className="text-gray-500 text-sm">Sarah Wilson joined - 6 hours ago</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Performance Overview</h3>
-              <div className="space-y-6">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600">Cargo Utilization</span>
-                    <span className="font-medium text-gray-900">75%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-blue-600 h-2 rounded-full" style={{width: '75%'}}></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600">Customer Satisfaction</span>
-                    <span className="font-medium text-gray-900">92%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-green-600 h-2 rounded-full" style={{width: '92%'}}></div>
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-600">Revenue Target</span>
-                    <span className="font-medium text-gray-900">68%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-yellow-600 h-2 rounded-full" style={{width: '68%'}}></div>
-                  </div>
-                </div>
-              </div>
-            </div>          </div>
-        </div>
+        </main>
       </div>
 
       {/* Add/Edit Vehicle Modal */}
@@ -657,7 +638,7 @@ const AdminDashboard = () => {
               <form onSubmit={handleAddVehicle} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Make *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Brand *</label>
                     <input
                       type="text"
                       name="make"
@@ -864,4 +845,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-                      
+                   
