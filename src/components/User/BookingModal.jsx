@@ -762,6 +762,14 @@ const BookingModal = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Payment QR Code <span className="text-red-500">*</span>
               </label>
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                Please pay the total amount to our official payment account using your preferred banking or e-wallet app. After payment, take a screenshot or photo of the QR code or payment confirmation and upload it below. Your booking will be reviewed and confirmed after payment verification.
+                <ul className="list-disc ml-5 mt-2 text-xs text-blue-700">
+                  <li>Only image files (JPG, PNG, etc.) are accepted (max 5MB).</li>
+                  <li>Make sure the QR code or payment details are clearly visible.</li>
+                  <li>Your booking will remain pending until payment is verified by our team.</li>
+                </ul>
+              </div>
               <div className="flex items-center space-x-3">
                 <label className="flex items-center px-3 py-2 bg-gray-100 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-200">
                   <UploadCloud size={20} className="mr-2 text-blue-600" />
@@ -844,3 +852,4 @@ const BookingModal = ({
 };
 
 export default BookingModal;
+
