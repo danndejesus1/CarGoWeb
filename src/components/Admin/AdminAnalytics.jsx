@@ -183,6 +183,105 @@ const AdminAnalytics = () => {
     fetchVehicles();
   }, []);
 
+  // Revenue analytics: sum totalCost of confirmed/completed bookings
+  useEffect(() => {
+    const fetchRevenue = async () => {
+      try {
+        const response = await databases.listDocuments(
+          'cargo-car-rental',
+          'bookings',
+          [Query.orderDesc('createdAt')]
+        );
+        const bookings = response.documents || [];
+        // Filter only confirmed and completed
+        const filtered = bookings.filter(
+          b => b.status === 'confirmed' || b.status === 'completed'
+        );
+        // Group by quarter or annual
+        if (revenueFilter === 'quarter') {
+          // Group by Q1-Q4 of current year
+          const quarters = [0, 0, 0, 0];
+          filtered.forEach(b => {
+            const d = new Date(b.createdAt || b.$createdAt);
+            const q = Math.floor(d.getMonth() / 3); // 0-3
+            quarters[q] += Number(b.totalCost) || 0;
+          });
+          setRevenueData([
+            { period: 'Q1', revenue: quarters[0] },
+            { period: 'Q2', revenue: quarters[1] },
+            { period: 'Q3', revenue: quarters[2] },
+            { period: 'Q4', revenue: quarters[3] },
+          ]);
+        } else if (revenueFilter === 'annual') {
+          // Group by year
+          const yearMap = {};
+          filtered.forEach(b => {
+            const d = new Date(b.createdAt || b.$createdAt);
+            const year = d.getFullYear();
+            yearMap[year] = (yearMap[year] || 0) + (Number(b.totalCost) || 0);
+          });
+          const years = Object.keys(yearMap).sort();
+          setRevenueData(
+            years.map(y => ({ period: y, revenue: yearMap[y] }))
+          );
+        }
+      } catch (err) {
+        setRevenueData([]);
+      }
+    };
+    fetchRevenue();
+  }, [revenueFilter]);
+
+  // Booking trends by vehicle type (from bookings)
+  useEffect(() => {
+    const fetchBookingTrends = async () => {
+      try {
+        const response = await databases.listDocuments(
+          'cargo-car-rental',
+          'bookings',
+          [Query.orderDesc('createdAt')]
+        );
+        const bookings = response.documents || [];
+        // Only include confirmed/completed bookings for trends
+        const filtered = bookings.filter(
+          b => b.status === 'confirmed' || b.status === 'completed'
+        );
+        // Group by month and vehicle type for the current year
+        const now = new Date();
+        const year = now.getFullYear();
+        // Get last 4 months (including current)
+        const monthsArr = [];
+        for (let i = 3; i >= 0; i--) {
+          const d = new Date(year, now.getMonth() - i, 1);
+          monthsArr.push({ label: d.toLocaleString('en-US', { month: 'short' }), month: d.getMonth(), year: d.getFullYear() });
+        }
+        // Collect all vehicle types present
+        const vehicleTypesSet = new Set();
+        filtered.forEach(b => {
+          if (b.vehicleType) vehicleTypesSet.add(b.vehicleType);
+        });
+        const vehicleTypes = Array.from(vehicleTypesSet);
+
+        // Build trends data
+        const trends = monthsArr.map(({ label, month, year }) => {
+          const entry = { month: label };
+          vehicleTypes.forEach(type => { entry[type] = 0; });
+          filtered.forEach(b => {
+            const d = new Date(b.createdAt || b.$createdAt);
+            if (d.getFullYear() === year && d.getMonth() === month && b.vehicleType) {
+              entry[b.vehicleType] = (entry[b.vehicleType] || 0) + 1;
+            }
+          });
+          return entry;
+        });
+        setBookingTrendsData(trends);
+      } catch (err) {
+        setBookingTrendsData([]);
+      }
+    };
+    fetchBookingTrends();
+  }, [bookingFilter, vehicleLocation, revenueFilter]);
+
   return (
     <div className="space-y-10">
       {/* Total Bookings */}
@@ -275,7 +374,7 @@ const AdminAnalytics = () => {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="period" />
             <YAxis />
-            <Tooltip />
+            <Tooltip formatter={value => `₱${Number(value).toLocaleString()}`} />
             <Bar dataKey="revenue" fill="#f59e42" />
           </BarChart>
         </ResponsiveContainer>
@@ -291,10 +390,18 @@ const AdminAnalytics = () => {
             <YAxis />
             <Tooltip />
             <Legend />
-            <Bar dataKey="Sedan" stackId="a" fill="#2563eb" />
-            <Bar dataKey="SUV" stackId="a" fill="#22c55e" />
-            <Bar dataKey="Van" stackId="a" fill="#f59e42" />
-            <Bar dataKey="Pickup" stackId="a" fill="#a855f7" />
+            {/* Dynamically render bars for each vehicle type */}
+            {bookingTrendsData.length > 0 &&
+              Object.keys(bookingTrendsData[0])
+                .filter(key => key !== 'month')
+                .map((type, idx) => (
+                  <Bar
+                    key={type}
+                    dataKey={type}
+                    stackId="a"
+                    fill={['#2563eb', '#22c55e', '#f59e42', '#a855f7', '#f43f5e', '#0ea5e9'][idx % 6]}
+                  />
+                ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
