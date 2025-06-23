@@ -307,13 +307,13 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           />
         </div>
 
-        {/* Make as text input */}
+        {/* Brand as text input */}
         <StableInput 
-          label="Make"
+          label="Brand"
           value={inputValues.make}
           onChange={handleMakeChange}
           type="text"
-          placeholder="Enter make..."
+          placeholder="Enter brand..."
         />
 
         <StableInput 
