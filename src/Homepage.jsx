@@ -121,59 +121,46 @@ const HomePage = () => {
     }
   ];
 
-  const mockBookings = [
-    {
-      id: '1',
-      vehicleId: '1',
-      pickupDate: '2025-07-01',
-      returnDate: '2025-07-05',
-      status: 'confirmed'
-    },
-    {
-      id: '2',
-      vehicleId: '2',
-      pickupDate: '2025-07-15',
-      returnDate: '2025-07-20',
-      status: 'pending'
-    }
-  ];  // Initialize data
+  // Initialize data
   useEffect(() => {
-    loadVehiclesFromDatabase();
-    
     // Check real authentication status
     const checkAuth = async () => {
       try {
         const userData = await account.get();
         setIsLoggedIn(true);
         setUser(userData);
-        setBookings(mockBookings);
+        // Don't setBookings here; will be set after vehicles load
       } catch (error) {
-        // User not logged in
         setIsLoggedIn(false);
         setUser(null);
         setBookings([]);
       }
     };
-    
+
     checkAuth();
   }, []);
-  // Load vehicles from database
-  const loadVehiclesFromDatabase = async () => {
+
+  useEffect(() => {
+    // Only load vehicles and bookings after user is known (including null)
+    if (user !== undefined) {
+      loadVehiclesAndBookings();
+    }
+    // eslint-disable-next-line
+  }, [user]);
+
+  const loadVehiclesAndBookings = async () => {
     try {
       const response = await databases.listDocuments(
         'cargo-car-rental',
         'vehicles'
       );
-      // Fetch all bookings (not just mock)
       const bookingsResponse = await databases.listDocuments(
         'cargo-car-rental',
         'bookings'
       );
       const allBookings = bookingsResponse.documents;
 
-      // Transform database documents to match expected format
       const dbVehicles = response.documents.map(doc => {
-        // Attach bookings for this vehicle
         const vehicleBookings = allBookings.filter(
           b => b.vehicleId === doc.$id && b.status !== 'cancelled'
         );
@@ -188,22 +175,28 @@ const HomePage = () => {
           imageFileId: doc.imageFileId,
           imageUrl: doc.imageUrl || 'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=400&h=250&fit=crop',
           available: doc.available !== false,
-          bookings: vehicleBookings // <-- attach bookings here
+          bookings: vehicleBookings
         };
       });
 
       setVehicles(dbVehicles);
+      setFilteredVehicles(dbVehicles.filter(vehicle => vehicle.available));
 
-      // Apply initial filter to show only available vehicles
-      const availableVehicles = dbVehicles.filter(vehicle => vehicle.available);
-      setFilteredVehicles(availableVehicles);
+      // Set bookings state to only this user's bookings
+      if (user && user.$id) {
+        const userBookings = allBookings.filter(b => b.userId === user.$id);
+        setBookings(userBookings);
+      } else {
+        setBookings([]);
+      }
     } catch (error) {
-      console.error('Error loading vehicles from database:', error);
-      // Fallback to mock data if database fails
+      console.error('Error loading vehicles/bookings from database:', error);
       setVehicles(mockVehicles);
       setFilteredVehicles(mockVehicles);
+      setBookings([]);
     }
   };
+
   // Handle booking
   const handleBookVehicle = (vehicle) => {
     if (!isLoggedIn) {
@@ -262,7 +255,7 @@ const HomePage = () => {
     setUser(userData);
     setIsLoggedIn(true);
     setShowAuth(false);
-    setBookings(mockBookings);
+    // Bookings will be loaded by useEffect after user is set
   };
 
   // Handle register success
@@ -270,7 +263,7 @@ const HomePage = () => {
     setUser(userData);
     setIsLoggedIn(true);
     setShowAuth(false);
-    setBookings(mockBookings);
+    // Bookings will be loaded by useEffect after user is set
   };
 
   // Cancel booking
@@ -283,6 +276,33 @@ const HomePage = () => {
   // Get vehicle by ID
   const getVehicleById = (id) => {
     return vehicles.find(v => v.id === id);
+  };
+
+  // Helper: Get most common vehicle type from user's bookings
+  const getMostBookedType = () => {
+    if (!bookings || bookings.length === 0) {
+      // Debug
+      console.log('No bookings found for recommendations.');
+      return null;
+    }
+    const typeCount = {};
+    bookings.forEach(b => {
+      // Try both b.vehicleId and b.id for matching
+      const v = getVehicleById(b.vehicleId) || getVehicleById(b.id);
+      if (v && v.type) {
+        typeCount[v.type] = (typeCount[v.type] || 0) + 1;
+      }
+    });
+    let maxType = null, maxCount = 0;
+    Object.entries(typeCount).forEach(([type, count]) => {
+      if (count > maxCount) {
+        maxType = type;
+        maxCount = count;
+      }
+    });
+    // Debug
+    if (!maxType) console.log('No matching vehicle types found in bookings.');
+    return maxType;
   };
 
   // Navigation component
@@ -681,6 +701,35 @@ const HomePage = () => {
     />
   );
 
+  // Recommendation Section
+  const RecommendationsSection = () => {
+    // Debug
+    // console.log('Rendering RecommendationsSection', { isLoggedIn, bookings });
+    if (!isLoggedIn || !bookings.length) return null;
+    const mostBookedType = getMostBookedType();
+    if (!mostBookedType) return null;
+    const recommended = vehicles.filter(
+      v => v.available && v.type === mostBookedType
+    );
+    // Debug
+    // console.log('Recommended vehicles:', recommended);
+    if (!recommended.length) return null;
+    return (
+      <section className="py-10 px-4 bg-white">
+        <div className="container mx-auto">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">
+            Recommended for You
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {recommended.map(vehicle => (
+              <VehicleCard key={vehicle.id} vehicle={vehicle} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   // Footer
   const Footer = () => (
     <footer className="bg-gray-800 text-white py-8 px-4">
@@ -701,6 +750,8 @@ const HomePage = () => {
       {activeSection === 'home' && (
         <>
           <HeroSection />
+          {/* Show recommendations only if logged in and has bookings */}
+          <RecommendationsSection />
           <HomeServicesSection />
         </>
       )}
