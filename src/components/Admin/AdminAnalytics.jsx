@@ -282,16 +282,226 @@ const AdminAnalytics = () => {
     fetchBookingTrends();
   }, [bookingFilter, vehicleLocation, revenueFilter]);
 
+  // Calculate new users this week
+  const [newUsersThisWeek, setNewUsersThisWeek] = useState(0);
+
+  // Calculate total bookings
+  const [totalBookings, setTotalBookings] = useState(0);
+
+  // Calculate active rentals (confirmed bookings)
+  const [activeRentals, setActiveRentals] = useState(0);
+
+  useEffect(() => {
+    const fetchNewUsersThisWeek = async () => {
+      try {
+        const response = await databases.listDocuments(
+          'cargo-car-rental',
+          'users'
+        );
+        const users = response.documents;
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        const count = users.filter(user => {
+          const created = new Date(user.$createdAt || user.createdAt);
+          return created >= startOfWeek && created <= now;
+        }).length;
+        setNewUsersThisWeek(count);
+      } catch (err) {
+        setNewUsersThisWeek(0);
+      }
+    };
+    fetchNewUsersThisWeek();
+  }, []);
+
+  useEffect(() => {
+    const fetchTotalBookingsAndActiveRentals = async () => {
+      try {
+        const response = await databases.listDocuments(
+          'cargo-car-rental',
+          'bookings'
+        );
+        const bookings = response.documents || [];
+        setTotalBookings(response.total || bookings.length || 0);
+        // Count bookings with status 'confirmed'
+        setActiveRentals(bookings.filter(b => b.status === 'confirmed').length);
+      } catch (err) {
+        setTotalBookings(0);
+        setActiveRentals(0);
+      }
+    };
+    fetchTotalBookingsAndActiveRentals();
+  }, []);
+
+  const summary = [
+    {
+      label: 'TOTAL BOOKINGS',
+      value: totalBookings,
+      change: '+12% from last month',
+      icon: (
+        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100">
+          <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <rect x="3" y="7" width="18" height="10" rx="2" />
+            <path d="M16 3v4M8 3v4" />
+          </svg>
+        </span>
+      ),
+      color: 'text-blue-600'
+    },
+    {
+      label: 'ACTIVE RENTALS',
+      value: activeRentals,
+      change: '+3 new today',
+      icon: (
+        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-100">
+          <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <rect x="3" y="11" width="18" height="6" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+        </span>
+      ),
+      color: 'text-green-600'
+    },
+    {
+      label: 'TOTAL USERS',
+      value: activeUsersCount, // Use actual user count
+      change: `+${newUsersThisWeek} new this week`,
+      icon: (
+        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-100">
+          <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M6 20v-2a4 4 0 014-4h0a4 4 0 014 4v2" />
+          </svg>
+        </span>
+      ),
+      color: 'text-purple-600'
+    },
+    {
+      label: 'MONTHLY REVENUE',
+      value: '$12,450',
+      change: '+18% from last month',
+      icon: (
+        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100">
+          <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4l3 3" />
+          </svg>
+        </span>
+      ),
+      color: 'text-yellow-600'
+    }
+  ];
+
+  // Dynamic descriptions for each chart/card, now with data interpretation
+  const getDescription = (key) => {
+    switch (key) {
+      case 'TOTAL BOOKINGS': {
+        let trend = summary[0]?.change || '';
+        return `There are currently ${totalBookings} bookings in the system. ${trend} This indicates ${totalBookings > 0 ? 'a healthy demand for rentals.' : 'no bookings yet.'}`;
+      }
+      case 'ACTIVE RENTALS': {
+        let trend = summary[1]?.change || '';
+        return `There are ${activeRentals} active rentals at the moment. ${trend} ${activeRentals > 0 ? 'This means several vehicles are currently in use.' : 'No vehicles are actively rented right now.'}`;
+      }
+      case 'TOTAL USERS': {
+        let trend = summary[2]?.change || '';
+        return `There are ${activeUsersCount} registered users. ${trend} ${newUsersThisWeek > 0 ? 'User growth is ongoing, showing continued interest in the platform.' : 'No new users joined this week.'}`;
+      }
+      case 'MONTHLY REVENUE': {
+        const last = revenueData?.[revenueData.length - 1]?.revenue || 0;
+        const prev = revenueData?.[revenueData.length - 2]?.revenue || 0;
+        let diff = last - prev;
+        let percent = prev ? ((diff / prev) * 100).toFixed(1) : 0;
+        let trend = diff > 0 ? `an increase of ${percent}%` : diff < 0 ? `a decrease of ${Math.abs(percent)}%` : 'no change';
+        return `The latest revenue is ₱${last.toLocaleString()}. Compared to the previous period, this is ${trend}. This reflects ${diff > 0 ? 'growing' : diff < 0 ? 'declining' : 'stable'} earnings.`;
+      }
+      case 'Total Bookings Chart': {
+        if (!bookingsData.length) return 'No booking data available for the selected period.';
+        const max = bookingsData.reduce((a, b) => a.bookings > b.bookings ? a : b, bookingsData[0]);
+        const min = bookingsData.reduce((a, b) => a.bookings < b.bookings ? a : b, bookingsData[0]);
+        return `Bookings peaked on ${max.period} (${max.bookings} bookings) and were lowest on ${min.period} (${min.bookings} bookings) for the selected period (${bookingFilter}).`;
+      }
+      case 'Active Users Chart': {
+        if (!activeUsersData.length) return 'No active user data available.';
+        const max = activeUsersData.reduce((a, b) => a.users > b.users ? a : b, activeUsersData[0]);
+        const min = activeUsersData.reduce((a, b) => a.users < b.users ? a : b, activeUsersData[0]);
+        return `User signups peaked in ${max.date} (${max.users} users) and were lowest in ${min.date} (${min.users} users) over the last four weeks.`;
+      }
+      case 'Available Vehicles': {
+        if (!availableVehiclesByStatus.length) return 'No vehicle data available.';
+        const available = availableVehiclesByStatus.find(v => v.name === 'Available')?.value || 0;
+        const unavailable = availableVehiclesByStatus.find(v => v.name === 'Unavailable')?.value || 0;
+        const total = available + unavailable;
+        const percent = total ? Math.round((available / total) * 100) : 0;
+        return `${available} out of ${total} vehicles (${percent}%) are currently available for booking.`;
+      }
+      case 'Revenue Earned': {
+        if (!revenueData.length) return 'No revenue data available.';
+        const last = revenueData[revenueData.length - 1];
+        const prev = revenueData[revenueData.length - 2];
+        let diff = last && prev ? last.revenue - prev.revenue : 0;
+        let percent = prev && prev.revenue ? ((diff / prev.revenue) * 100).toFixed(1) : 0;
+        let trend = diff > 0 ? `an increase of ${percent}%` : diff < 0 ? `a decrease of ${Math.abs(percent)}%` : 'no change';
+        return `Revenue for ${last?.period || ''} is ₱${last?.revenue?.toLocaleString() || 0}. Compared to the previous period, this is ${trend}.`;
+      }
+      case 'Booking Trends by Vehicle Type': {
+        if (!bookingTrendsData.length) return 'No booking trends data available.';
+        // Find most popular vehicle type in the latest month
+        const last = bookingTrendsData[bookingTrendsData.length - 1];
+        const types = Object.entries(last).filter(([k]) => k !== 'month');
+        if (!types.length) return 'No vehicle type data for the latest month.';
+        const [topType, topCount] = types.reduce((a, b) => (a[1] > b[1] ? a : b));
+        return `In ${last.month}, the most booked vehicle type was ${topType} (${topCount} bookings). This helps identify customer preferences.`;
+      }
+      default:
+        return '';
+    }
+  };
+
+  // Track which description is open
+  const [openDescKey, setOpenDescKey] = useState(null);
+
   return (
     <div className="space-y-10">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+        {summary.map((item, idx) => (
+          <div
+            key={idx}
+            className="bg-white rounded-xl shadow p-5 flex items-center gap-4 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+            onClick={() =>
+              setOpenDescKey(openDescKey === item.label ? null : item.label)
+            }
+            title="Click for more info"
+          >
+            <div>{item.icon}</div>
+            <div>
+              <div className="text-xs font-medium text-gray-500 uppercase">{item.label}</div>
+              <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
+              <div className="text-xs text-green-500 mt-1">{item.change}</div>
+              {openDescKey === item.label && (
+                <div className="mt-2 text-xs text-gray-700 bg-blue-50 rounded p-2">{getDescription(item.label)}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Total Bookings */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <div
+        className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+        onClick={() =>
+          setOpenDescKey(openDescKey === 'Total Bookings Chart' ? null : 'Total Bookings Chart')
+        }
+        title="Click for more info"
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900">Total Bookings</h3>
           <div className="space-x-2">
-            <button onClick={() => setBookingFilter('weekly')} className={`px-3 py-1 rounded ${bookingFilter === 'weekly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Weekly</button>
-            <button onClick={() => setBookingFilter('monthly')} className={`px-3 py-1 rounded ${bookingFilter === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Monthly</button>
-            <button onClick={() => setBookingFilter('yearly')} className={`px-3 py-1 rounded ${bookingFilter === 'yearly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Yearly</button>
+            <button onClick={e => { e.stopPropagation(); setBookingFilter('weekly'); }} className={`px-3 py-1 rounded ${bookingFilter === 'weekly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Weekly</button>
+            <button onClick={e => { e.stopPropagation(); setBookingFilter('monthly'); }} className={`px-3 py-1 rounded ${bookingFilter === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Monthly</button>
+            <button onClick={e => { e.stopPropagation(); setBookingFilter('yearly'); }} className={`px-3 py-1 rounded ${bookingFilter === 'yearly' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Yearly</button>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -314,10 +524,19 @@ const AdminAnalytics = () => {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        {openDescKey === 'Total Bookings Chart' && (
+          <div className="mt-4 text-sm text-gray-700 bg-blue-50 rounded p-3">{getDescription('Total Bookings Chart')}</div>
+        )}
       </div>
 
       {/* Active Users */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <div
+        className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+        onClick={() =>
+          setOpenDescKey(openDescKey === 'Active Users Chart' ? null : 'Active Users Chart')
+        }
+        title="Click for more info"
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900">Active Users</h3>
           <span className="text-2xl font-bold text-blue-600">{activeUsersCount}</span>
@@ -331,10 +550,19 @@ const AdminAnalytics = () => {
             <Line type="monotone" dataKey="users" stroke="#6366f1" strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
+        {openDescKey === 'Active Users Chart' && (
+          <div className="mt-4 text-sm text-gray-700 bg-blue-50 rounded p-3">{getDescription('Active Users Chart')}</div>
+        )}
       </div>
 
       {/* Available Vehicles */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <div
+        className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+        onClick={() =>
+          setOpenDescKey(openDescKey === 'Available Vehicles' ? null : 'Available Vehicles')
+        }
+        title="Click for more info"
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900">Available Vehicles</h3>
         </div>
@@ -358,15 +586,24 @@ const AdminAnalytics = () => {
             <Legend />
           </PieChart>
         </ResponsiveContainer>
+        {openDescKey === 'Available Vehicles' && (
+          <div className="mt-4 text-sm text-gray-700 bg-blue-50 rounded p-3">{getDescription('Available Vehicles')}</div>
+        )}
       </div>
 
       {/* Revenue Earned */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <div
+        className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+        onClick={() =>
+          setOpenDescKey(openDescKey === 'Revenue Earned' ? null : 'Revenue Earned')
+        }
+        title="Click for more info"
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900">Revenue Earned</h3>
           <div className="space-x-2">
-            <button onClick={() => setRevenueFilter('quarter')} className={`px-3 py-1 rounded ${revenueFilter === 'quarter' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Quarter</button>
-            <button onClick={() => setRevenueFilter('annual')} className={`px-3 py-1 rounded ${revenueFilter === 'annual' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Annual</button>
+            <button onClick={e => { e.stopPropagation(); setRevenueFilter('quarter'); }} className={`px-3 py-1 rounded ${revenueFilter === 'quarter' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Quarter</button>
+            <button onClick={e => { e.stopPropagation(); setRevenueFilter('annual'); }} className={`px-3 py-1 rounded ${revenueFilter === 'annual' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>Annual</button>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={220}>
@@ -378,10 +615,19 @@ const AdminAnalytics = () => {
             <Bar dataKey="revenue" fill="#f59e42" />
           </BarChart>
         </ResponsiveContainer>
+        {openDescKey === 'Revenue Earned' && (
+          <div className="mt-4 text-sm text-gray-700 bg-blue-50 rounded p-3">{getDescription('Revenue Earned')}</div>
+        )}
       </div>
 
       {/* Booking Trends by Vehicle Type */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+      <div
+        className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 cursor-pointer hover:bg-blue-50 transition"
+        onClick={() =>
+          setOpenDescKey(openDescKey === 'Booking Trends by Vehicle Type' ? null : 'Booking Trends by Vehicle Type')
+        }
+        title="Click for more info"
+      >
         <h3 className="text-lg font-bold text-gray-900 mb-4">Booking Trends by Vehicle Type</h3>
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={bookingTrendsData}>
@@ -392,7 +638,7 @@ const AdminAnalytics = () => {
             <Legend />
             {/* Dynamically render bars for each vehicle type */}
             {bookingTrendsData.length > 0 &&
-              Object.keys(bookingTrendsData[0])
+              Object.keys(bookingTrendsData[0] || {})
                 .filter(key => key !== 'month')
                 .map((type, idx) => (
                   <Bar
@@ -404,6 +650,9 @@ const AdminAnalytics = () => {
                 ))}
           </BarChart>
         </ResponsiveContainer>
+        {openDescKey === 'Booking Trends by Vehicle Type' && (
+          <div className="mt-4 text-sm text-gray-700 bg-blue-50 rounded p-3">{getDescription('Booking Trends by Vehicle Type')}</div>
+        )}
       </div>
     </div>
   );

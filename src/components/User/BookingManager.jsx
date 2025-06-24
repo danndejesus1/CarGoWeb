@@ -146,7 +146,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
       await databases.updateDocument(
         DATABASE_ID,
         BOOKINGS_COLLECTION_ID,
-        bookingId,
+        bookingId, // bookingId should be $id
         { status: 'cancelled', updatedAt: new Date().toISOString() }
       );
       await loadBookings();
@@ -164,7 +164,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
       await databases.deleteDocument(
         DATABASE_ID,
         BOOKINGS_COLLECTION_ID,
-        bookingId
+        bookingId // bookingId should be $id
       );
       await loadBookings();
       if (onUpdateBookings) onUpdateBookings();
@@ -563,7 +563,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     </button>
                     {/* Remove from History always available */}
                     <button
-                      onClick={() => handleRemoveBooking(booking.id)}
+                      onClick={() => handleRemoveBooking(booking.$id)}
                       className="text-gray-400 hover:text-gray-700 p-1"
                       title="Remove from History"
                     >
@@ -572,7 +572,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
                     {booking.status === 'pending' && (
                       <>
                         <button 
-                          onClick={() => handleCancelBooking(booking.id)}
+                          onClick={() => handleCancelBooking(booking.$id)}
                           className="text-red-600 hover:text-red-800 p-1"
                           title="Cancel Booking"
                         >
@@ -807,7 +807,7 @@ const BookingManager = ({ user, onUpdateBookings }) => {
               {selectedBooking.status === 'pending' && (
                 <button 
                   onClick={() => {
-                    handleCancelBooking(selectedBooking.id);
+                    handleCancelBooking(selectedBooking.id); // selectedBooking.id is already $id
                     setShowDetailsModal(false);
                   }}
                   className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition duration-300"

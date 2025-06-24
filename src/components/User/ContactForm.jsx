@@ -9,6 +9,9 @@ const ContactForm = () => {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  // Modal state and last report summary
+  const [showModal, setShowModal] = useState(false);
+  const [lastReport, setLastReport] = useState(null);
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -31,12 +34,27 @@ const ContactForm = () => {
         }
       );
       setSent(true);
+      setLastReport(form); // Save the submitted report for summary
+      setShowModal(true);  // Show confirmation modal
       setForm({ name: '', email: '', subject: '', message: '' });
       setTimeout(() => setSent(false), 4000);
     } catch (err) {
       console.error('Appwrite error:', err);
       setError('Failed to send feedback. Please try again.');
     }
+  };
+
+  // Handler for making another report
+  const handleAnotherReport = () => {
+    setShowModal(false);
+    setLastReport(null);
+    setForm({ name: '', email: '', subject: '', message: '' });
+  };
+
+  // Handler for closing the modal
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setLastReport(null);
   };
 
   return (
@@ -49,7 +67,7 @@ const ContactForm = () => {
         <div className="max-w-md mx-auto bg-gray-50 p-8 rounded-lg shadow-md">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name*</label>
               <input
                 type="text"
                 name="name"
@@ -60,7 +78,7 @@ const ContactForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email*</label>
               <input
                 type="email"
                 name="email"
@@ -71,7 +89,7 @@ const ContactForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Subject*</label>
               <input
                 type="text"
                 name="subject"
@@ -82,7 +100,7 @@ const ContactForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Message*</label>
               <textarea
                 name="message"
                 value={form.message}
@@ -110,6 +128,35 @@ const ContactForm = () => {
           )}
         </div>
       </div>
+      {/* Confirmation Modal */}
+      {showModal && lastReport && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-2 text-center text-green-700">We have received your report!</h3>
+            <p className="mb-4 text-center text-gray-700">Thank you for reaching out. Here’s a summary of your report:</p>
+            <div className="mb-4 text-sm text-gray-800">
+              <div><span className="font-semibold">Name:</span> {lastReport.name}</div>
+              <div><span className="font-semibold">Email:</span> {lastReport.email}</div>
+              <div><span className="font-semibold">Subject:</span> {lastReport.subject}</div>
+              <div><span className="font-semibold">Message:</span> {lastReport.message}</div>
+            </div>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={handleAnotherReport}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+              >
+                Make Another Report
+              </button>
+              <button
+                onClick={handleCloseModal}
+                className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

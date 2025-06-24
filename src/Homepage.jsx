@@ -379,7 +379,17 @@ const HomePage = () => {
 
         {/* Services overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          {/* Premium Vehicles Card - Entirely Clickable */}
+          <div
+            className="bg-white rounded-lg shadow-md p-6 text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveSection('vehicles')}
+            tabIndex={0}
+            role="button"
+            aria-label="Premium Vehicles"
+            onKeyPress={e => {
+              if (e.key === 'Enter' || e.key === ' ') setActiveSection('vehicles');
+            }}
+          >
             <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
               <Car className="h-10 w-10 text-blue-600" />
             </div>
@@ -390,22 +400,47 @@ const HomePage = () => {
             </p>
           </div>
           
-          <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          {/* Click to Book Now Card - Entirely Clickable */}
+          <div
+            className="bg-white rounded-lg shadow-md p-6 text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => {
+              if (isLoggedIn) {
+                // Find first available vehicle
+                const available = vehicles.find(v => v.available);
+                if (available) {
+                  setSelectedVehicle(available);
+                  setShowBookingModal(true);
+                } else {
+                  alert('No available vehicles to book at the moment.');
+                }
+              } else {
+                showLoginModal();
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label="Click to Book Now"
+            onKeyPress={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                if (isLoggedIn) {
+                  const available = vehicles.find(v => v.available);
+                  if (available) {
+                    setSelectedVehicle(available);
+                    setShowBookingModal(true);
+                  } else {
+                    alert('No available vehicles to book at the moment.');
+                  }
+                } else {
+                  showLoginModal();
+                }
+              }
+            }}
+          >
             <div className="rounded-full bg-blue-100 p-4 mx-auto w-20 h-20 flex items-center justify-center mb-4">
               <Calendar className="h-10 w-10 text-blue-600" />
             </div>
-            {/* Make the whole card clickable, styled like Contact Us card */}
             <h3 className="text-xl font-bold text-gray-800 mb-3">Click to Book Now</h3>
-            <p
-              className="text-gray-600 cursor-pointer"
-              onClick={() => setActiveSection('vehicles')}
-              tabIndex={0}
-              role="button"
-              aria-label="Book Vehicles"
-              onKeyPress={e => {
-                if (e.key === 'Enter' || e.key === ' ') setActiveSection('vehicles');
-              }}
-            >
+            <p className="text-gray-600">
               Book online in minutes with our easy-to-use platform. Enjoy flexible pickup and return options,
               with the ability to modify or cancel your reservation as needed.
             </p>
@@ -434,11 +469,16 @@ const HomePage = () => {
         </div>
         
         {/* Vehicle categories */}
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">Our Fleet</h2>
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">Our Vehicles</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="h-48 bg-blue-100 flex items-center justify-center">
-              <Car className="h-16 w-16 text-blue-600" />
+              {/* Sedans: Car image */}
+              <img
+                src="https://upload.wikimedia.org/wikipedia/commons/a/a6/2017_Toyota_Camry_%28ASV70R%29_SX_sedan_%282018-11-02%29_01.jpg"
+                alt="Sedan"
+                className="h-32 object-contain"
+              />
             </div>
             <div className="p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-2">Sedans</h3>
@@ -464,7 +504,12 @@ const HomePage = () => {
           
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="h-48 bg-green-100 flex items-center justify-center">
-              <Car className="h-16 w-16 text-green-600" />
+              {/* SUVs: SUV image */}
+              <img
+                src="https://www.chevrolet.com/content/dam/chevrolet/na/us/english/index/vehicle-groups/suv/visid/01-images/suv-segment-suv-offers.png?imwidth=1200"
+                alt="SUV"
+                className="h-32 object-contain"
+              />
             </div>
             <div className="p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-2">SUVs</h3>
@@ -490,7 +535,12 @@ const HomePage = () => {
           
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="h-48 bg-yellow-100 flex items-center justify-center">
-              <Car className="h-16 w-16 text-yellow-600" />
+              {/* Premium: Premium car image */}
+              <img
+                src="https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?w=300&h=120&fit=crop"
+                alt="Premium"
+                className="h-32 object-contain"
+              />
             </div>
             <div className="p-6">
               <h3 className="text-xl font-bold text-gray-800 mb-2">Premium</h3>
@@ -520,7 +570,7 @@ const HomePage = () => {
             onClick={() => setActiveSection('vehicles')}
             className="bg-blue-600 text-white font-bold py-3 px-8 rounded-md hover:bg-blue-700 transition duration-300"
           >
-            Browse Our Fleet
+            Browse Our Vehicles
           </button>
         </div>
       </div>

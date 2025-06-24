@@ -2,6 +2,39 @@ import React, { useEffect, useState } from 'react';
 import { databases } from '../../appwrite/config';
 import { CheckCircle, XCircle, Loader2, User as UserIcon, ChevronDown } from 'lucide-react';
 
+// Simple Modal component
+const ConfirmModal = ({ open, title, message, onConfirm, onCancel, loading }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
+        <h4 className="font-bold text-lg mb-2">{title}</h4>
+        <p className="mb-4 text-gray-700">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
+            ) : (
+              'Yes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DB_ID = 'cargo-car-rental';
 const COLLECTION_ID = 'users';
 
@@ -16,6 +49,13 @@ const AdminManageUsers = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('firstName');
   const [sortDir, setSortDir] = useState('asc');
+
+  // Modal state
+  const [modal, setModal] = useState({
+    open: false,
+    user: null,
+    enable: null, // true = enable, false = disable
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -45,6 +85,37 @@ const AdminManageUsers = () => {
       setError('Failed to update user status');
     }
     setActionUserId(null);
+  };
+
+  // Handler to open modal
+  const handleToggleStatusModal = (user) => {
+    setModal({
+      open: true,
+      user,
+      enable: !(user.status === true || user.status === 1),
+    });
+  };
+
+  // Modal confirm action
+  const handleModalConfirm = async () => {
+    if (!modal.user) return;
+    setActionUserId(modal.user.$id);
+    setError('');
+    try {
+      await databases.updateDocument(DB_ID, COLLECTION_ID, modal.user.$id, {
+        status: modal.enable,
+      });
+      await fetchUsers();
+    } catch (e) {
+      setError('Failed to update user status');
+    }
+    setActionUserId(null);
+    setModal({ open: false, user: null, enable: null });
+  };
+
+  // Modal cancel action
+  const handleModalCancel = () => {
+    setModal({ open: false, user: null, enable: null });
   };
 
   // New: filtered and sorted users
@@ -188,7 +259,7 @@ const AdminManageUsers = () => {
                 <td className="px-4 py-2">
                   <button
                     className={`px-3 py-1 rounded text-white ${user.status === true || user.status === 1 ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} transition`}
-                    onClick={() => handleToggleStatus(user)}
+                    onClick={() => handleToggleStatusModal(user)}
                     disabled={actionUserId === user.$id}
                   >
                     {actionUserId === user.$id ? (
@@ -201,6 +272,28 @@ const AdminManageUsers = () => {
           </tbody>
         </table>
       )}
+
+      {/* Modal for confirmation */}
+      <ConfirmModal
+        open={modal.open}
+        title={
+          modal.enable === true
+            ? 'Enable User'
+            : modal.enable === false
+            ? 'Disable User'
+            : ''
+        }
+        message={
+          modal.enable === true
+            ? 'Are you sure you want to ENABLE this user?'
+            : modal.enable === false
+            ? 'Are you sure you want to DISABLE this user?'
+            : ''
+        }
+        onConfirm={handleModalConfirm}
+        onCancel={handleModalCancel}
+        loading={actionUserId === (modal.user && modal.user.$id)}
+      />
     </div>
   );
 };

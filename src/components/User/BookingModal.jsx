@@ -8,6 +8,9 @@ import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { uploadFile, FILE_CATEGORIES } from '../../appwrite/fileManager';
+import bdoQr from '../../assets/bdo-qr.png';      // Add your actual image paths
+import gcashQr from '../../assets/gcash-qr.png';
+import mayaQr from '../../assets/maya-qr.png';
 
 // Initialize dayjs plugins
 dayjs.extend(isSameOrBefore);
@@ -48,6 +51,12 @@ const BookingModal = ({
   const [paymentFileId, setPaymentFileId] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [paymentFieldUrl, setPaymentFieldUrl] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('BDO'); // NEW: default to BDO
+  const [qrModalOpen, setQrModalOpen] = useState(false); // NEW: for expanded QR
+  // Modal states for confirmation and result
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [resultModalContent, setResultModalContent] = useState({ success: false, message: '' });
 
   // Load disabled dates when component mounts or vehicle changes
   useEffect(() => {
@@ -261,7 +270,7 @@ const BookingModal = ({
     }
 
     if (!bookingData.pickupLocation || !bookingData.returnLocation) {
-      setError('Please specify pickup and return locations');
+      setError('Please specify pickup and destination');
       return false;
     }
 
@@ -273,19 +282,27 @@ const BookingModal = ({
     return true;
   };
 
-  const handleSubmit = async (e) => {
+  // Modified handleSubmit to not submit directly, but show confirmation modal
+  const handleSubmit = (e) => {
     e.preventDefault();
+    setShowConfirmModal(true);
+  };
 
+  // Actual booking logic, extracted from handleSubmit
+  const handleBookingConfirmed = async () => {
     if (!validateBooking()) {
+      setShowConfirmModal(false);
       return;
     }
     if (!paymentFileId) {
       setPaymentError('Please upload your payment QR code before confirming booking.');
+      setShowConfirmModal(false);
       return;
     }
 
     setLoading(true);
     setError('');
+    setShowConfirmModal(false);
 
     try {
       const bookingDoc = {
@@ -371,10 +388,13 @@ const BookingModal = ({
         bookings: userBookings
       });
 
-      // Call the completion callback with the database response
-      onBookingComplete(dbResponse);
-        // Close modal
-      onClose();    } catch (error) {
+      setResultModalContent({
+        success: true,
+        message: 'Booking submitted successfully! We will review your payment and confirm your booking soon.'
+      });
+      setShowResultModal(true);
+      // Close modal
+      // onClose();    } catch (error) {
       console.error('Booking error:', error);
       console.error('Full error details:', {
         message: error.message,
@@ -462,10 +482,78 @@ const BookingModal = ({
     }
   };
 
+  // Helper to get QR image based on payment method
+  const getQrImage = () => {
+    if (paymentMethod === 'BDO') return bdoQr;
+    if (paymentMethod === 'GCASH') return gcashQr;
+    if (paymentMethod === 'MAYA') return mayaQr;
+    return null;
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full flex flex-col items-center">
+            <CheckCircle size={48} className="text-blue-600 mb-2" />
+            <h4 className="text-lg font-bold mb-2 text-gray-800">Confirm Booking</h4>
+            <p className="text-gray-700 mb-4 text-center">
+              Are you sure you want to confirm this booking? Please ensure all details and payment are correct.
+            </p>
+            <div className="flex space-x-3 w-full">
+              <button
+                className="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400"
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                onClick={handleBookingConfirmed}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mx-auto"></div>
+                ) : (
+                  'Yes, Confirm'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Modal */}
+      {showResultModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full flex flex-col items-center">
+            {resultModalContent.success ? (
+              <CheckCircle size={48} className="text-green-600 mb-2" />
+            ) : (
+              <AlertTriangle size={48} className="text-red-600 mb-2" />
+            )}
+            <h4 className="text-lg font-bold mb-2 text-gray-800">
+              {resultModalContent.success ? 'Booking Submitted' : 'Booking Failed'}
+            </h4>
+            <p className="text-gray-700 mb-4 text-center">
+              {resultModalContent.message}
+            </p>
+            <button
+              className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700"
+              onClick={() => {
+                setShowResultModal(false);
+                if (resultModalContent.success) onClose();
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto scrollbar-hide">
         <div className="p-6">
           {/* Header */}
@@ -648,7 +736,7 @@ const BookingModal = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <MapPin size={16} className="inline mr-1" />
-                  Return Location *
+                  Destination *
                 </label>
                 <input
                   type="text"
@@ -762,11 +850,39 @@ const BookingModal = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload Payment QR Code <span className="text-red-500">*</span>
               </label>
+              {/* Payment Method Dropdown */}
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Choose Payment Method:
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="BDO">BDO</option>
+                  <option value="GCASH">GCASH</option>
+                  <option value="MAYA">MAYA</option>
+                </select>
+              </div>
+              {/* Show QR image for selected payment method */}
+              <div className="flex flex-col items-center mb-3">
+                <span className="text-xs text-gray-700 mb-1">
+                  Scan this QR code to pay via {paymentMethod}
+                </span>
+                <img
+                  src={getQrImage()}
+                  alt={`${paymentMethod} QR`}
+                  className="w-40 h-40 object-contain border rounded shadow bg-white cursor-pointer transition-transform hover:scale-105"
+                  onClick={() => setQrModalOpen(true)}
+                  title="Click to enlarge"
+                />
+              </div>
               <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
                 Please pay the total amount to our official payment account using your preferred banking or e-wallet app. After payment, take a screenshot or photo of the QR code or payment confirmation and upload it below. Your booking will be reviewed and confirmed after payment verification.
                 <ul className="list-disc ml-5 mt-2 text-xs text-blue-700">
                   <li>Only image files (JPG, PNG, etc.) are accepted (max 5MB).</li>
-                  <li>Make sure the QR code or payment details are clearly visible.</li>
+                  <li>Make sure the payment details are clearly visible.</li>
                   <li>Your booking will remain pending until payment is verified by our team.</li>
                 </ul>
               </div>

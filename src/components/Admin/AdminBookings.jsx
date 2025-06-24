@@ -99,6 +99,39 @@ const PaymentImage = ({ paymentFieldId }) => {
   );
 };
 
+// Simple Modal component
+const ConfirmModal = ({ open, title, message, onConfirm, onCancel, loading }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
+        <h4 className="font-bold text-lg mb-2">{title}</h4>
+        <p className="mb-4 text-gray-700">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
+            ) : (
+              'Yes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
@@ -111,6 +144,13 @@ const AdminBookings = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
+
+  // Modal state
+  const [modal, setModal] = useState({
+    open: false,
+    action: null, // 'confirm' | 'cancel'
+    bookingId: null,
+  });
 
   const loadBookings = async () => {
     setLoadingBookings(true);
@@ -129,43 +169,68 @@ const AdminBookings = () => {
     }
   };
 
-  // Confirm booking handler
-  const handleConfirmBooking = async (bookingId) => {
-    setUpdatingId(bookingId);
-    setError('');
-    try {
-      await databases.updateDocument(
-        'cargo-car-rental',
-        'bookings',
-        bookingId,
-        { status: 'confirmed', updatedAt: new Date().toISOString() }
-      );
-      // Refresh bookings
-      await loadBookings();
-    } catch (err) {
-      setError('Failed to confirm booking: ' + (err.message || err));
-    } finally {
-      setUpdatingId(null);
+  // Confirm booking handler (opens modal)
+  const handleConfirmBooking = (bookingId) => {
+    setModal({
+      open: true,
+      action: 'confirm',
+      bookingId,
+    });
+  };
+
+  // Cancel booking handler (opens modal)
+  const handleCancelBooking = (bookingId) => {
+    setModal({
+      open: true,
+      action: 'cancel',
+      bookingId,
+    });
+  };
+
+  // Modal confirm action
+  const handleModalConfirm = async () => {
+    if (!modal.bookingId) return;
+    if (modal.action === 'confirm') {
+      setUpdatingId(modal.bookingId);
+      setError('');
+      try {
+        await databases.updateDocument(
+          'cargo-car-rental',
+          'bookings',
+          modal.bookingId,
+          { status: 'confirmed', updatedAt: new Date().toISOString() }
+        );
+        // Refresh bookings
+        await loadBookings();
+      } catch (err) {
+        setError('Failed to confirm booking: ' + (err.message || err));
+      } finally {
+        setUpdatingId(null);
+        setModal({ open: false, action: null, bookingId: null });
+      }
+    } else if (modal.action === 'cancel') {
+      setCancellingId(modal.bookingId);
+      setError('');
+      try {
+        await databases.updateDocument(
+          'cargo-car-rental',
+          'bookings',
+          modal.bookingId,
+          { status: 'cancelled', updatedAt: new Date().toISOString() }
+        );
+        await loadBookings();
+      } catch (err) {
+        setError('Failed to cancel booking: ' + (err.message || err));
+      } finally {
+        setCancellingId(null);
+        setModal({ open: false, action: null, bookingId: null });
+      }
     }
   };
 
-  // Cancel booking handler
-  const handleCancelBooking = async (bookingId) => {
-    setCancellingId(bookingId);
-    setError('');
-    try {
-      await databases.updateDocument(
-        'cargo-car-rental',
-        'bookings',
-        bookingId,
-        { status: 'cancelled', updatedAt: new Date().toISOString() }
-      );
-      await loadBookings();
-    } catch (err) {
-      setError('Failed to cancel booking: ' + (err.message || err));
-    } finally {
-      setCancellingId(null);
-    }
+  // Modal cancel action
+  const handleModalCancel = () => {
+    setModal({ open: false, action: null, bookingId: null });
   };
 
   // New: filtered and sorted bookings
@@ -381,6 +446,27 @@ const AdminBookings = () => {
           </table>
         </div>
       )}
+      {/* Modal for confirmation */}
+      <ConfirmModal
+        open={modal.open}
+        title={
+          modal.action === 'confirm'
+            ? 'Confirm Booking'
+            : modal.action === 'cancel'
+            ? 'Cancel Booking'
+            : ''
+        }
+        message={
+          modal.action === 'confirm'
+            ? 'Are you sure you want to CONFIRM this booking?'
+            : modal.action === 'cancel'
+            ? 'Are you sure you want to CANCEL this booking?'
+            : ''
+        }
+        onConfirm={handleModalConfirm}
+        onCancel={handleModalCancel}
+        loading={modal.action === 'confirm' ? updatingId === modal.bookingId : cancellingId === modal.bookingId}
+      />
     </div>
   );
 };

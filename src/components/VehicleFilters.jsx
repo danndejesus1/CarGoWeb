@@ -52,6 +52,7 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
   // State stored at parent level
   const [inputValues, setInputValues] = useState({
     make: '',
+    model: '',
     type: '',
     gasType: '',
     seatingCapacity: '',
@@ -71,6 +72,10 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
   // Input change handlers that don't cause UI refreshes
   const handleMakeChange = useCallback((value) => {
     setInputValues(prev => ({ ...prev, make: value }));
+  }, []);
+
+  const handleModelChange = useCallback((value) => {
+    setInputValues(prev => ({ ...prev, model: value }));
   }, []);
 
   const handleTypeChange = useCallback((value) => {
@@ -93,6 +98,31 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
     setInputValues(prev => ({ ...prev, searchText: value }));
   }, []);
   
+  // Extract unique brands, models, types, and gas types from vehicles
+  const brandOptions = React.useMemo(() => {
+    const brands = new Set();
+    vehicles?.forEach(v => v.make && brands.add(v.make));
+    return Array.from(brands).map(b => ({ value: b, label: b }));
+  }, [vehicles]);
+
+  const modelOptions = React.useMemo(() => {
+    const models = new Set();
+    vehicles?.forEach(v => v.model && models.add(v.model));
+    return Array.from(models).map(m => ({ value: m, label: m }));
+  }, [vehicles]);
+
+  const typeOptions = React.useMemo(() => {
+    const types = new Set();
+    vehicles?.forEach(v => v.type && types.add(v.type));
+    return Array.from(types).map(t => ({ value: t, label: t }));
+  }, [vehicles]);
+
+  const gasTypeOptions = React.useMemo(() => {
+    const gasTypes = new Set();
+    vehicles?.forEach(v => v.gasType && gasTypes.add(v.gasType));
+    return Array.from(gasTypes).map(g => ({ value: g, label: g }));
+  }, [vehicles]);
+
   // Helper: check if a vehicle is available for the selected date range (date-based, ignore time)
   const isVehicleAvailableForDates = useCallback((vehicle, pickupDate, returnDate) => {
     if (vehicle.available === false) return false;
@@ -157,6 +187,13 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
         console.log('After make filter:', filtered.length, 'vehicles');
       }
       
+      // Apply model filter (case-insensitive, partial match)
+      if (inputValues.model) {
+        const modelLower = inputValues.model.toLowerCase();
+        filtered = filtered.filter(v => v.model && v.model.toLowerCase().includes(modelLower));
+        console.log('After model filter:', filtered.length, 'vehicles');
+      }
+      
       if (inputValues.type) {
         filtered = filtered.filter(v => v.type === inputValues.type);
         console.log('After type filter:', filtered.length, 'vehicles');
@@ -215,6 +252,7 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
   const clearFilters = useCallback(() => {
     const defaultFilters = {
       make: '',
+      model: '',
       type: '',
       gasType: '',
       seatingCapacity: '',
@@ -307,36 +345,51 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
           />
         </div>
 
-        {/* Brand as text input */}
+        {/* Brand as dropdown */}
         <StableInput 
           label="Brand"
           value={inputValues.make}
           onChange={handleMakeChange}
-          type="text"
-          placeholder="Enter brand..."
+          type="select"
+          options={[
+            { value: "", label: "Select Brand" },
+            ...brandOptions
+          ]}
         />
 
+        {/* Model as dropdown */}
         <StableInput 
-          label="Car Type"
+          label="Model"
+          value={inputValues.model || ""}
+          onChange={value => setInputValues(prev => ({ ...prev, model: value }))}
+          type="select"
+          options={[
+            { value: "", label: "Select Model" },
+            ...modelOptions
+          ]}
+        />
+
+        {/* Vehicle Type as dropdown */}
+        <StableInput 
+          label="Vehicle Type"
           value={inputValues.type}
           onChange={handleTypeChange}
           type="select"
           options={[
-            { value: "", label: "All Types" },
-            { value: "Sedan", label: "Sedan" },
-            { value: "SUV", label: "SUV" }
+            { value: "", label: "Select Type" },
+            ...typeOptions
           ]}
         />
 
+        {/* Gas Type as dropdown */}
         <StableInput 
           label="Gas Type"
           value={inputValues.gasType}
           onChange={handleGasTypeChange}
           type="select"
           options={[
-            { value: "", label: "All Gas Types" },
-            { value: "Petrol", label: "Petrol" },
-            { value: "Diesel", label: "Diesel" }
+            { value: "", label: "Select Gas Type" },
+            ...gasTypeOptions
           ]}
         />
 
@@ -380,6 +433,17 @@ const VehicleFilters = ({ vehicles, onFilteredVehiclesChange }) => {
             Brand: {inputValues.make}
             <button 
               onClick={() => handleMakeChange('')}
+              className="ml-1 text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </span>
+        )}
+        {inputValues.model && (
+          <span className="inline-flex items-center bg-gray-100 text-gray-800 px-2 py-1 rounded">
+            Model: {inputValues.model}
+            <button 
+              onClick={() => handleModelChange('')}
               className="ml-1 text-gray-500 hover:text-gray-700"
             >
               ×
