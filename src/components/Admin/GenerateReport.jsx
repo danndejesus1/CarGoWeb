@@ -343,6 +343,10 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
   return (
     <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-100">
       <h2 className="text-2xl font-bold mb-4 text-gray-900">Generate Report</h2>
+      {/* Date filter description */}
+      <div className="mb-2 text-sm text-gray-600">
+        Select a date range to filter bookings by their pickup and return dates. "From" sets the earliest pickup date, and "To" sets the latest return date (inclusive).
+      </div>
       <div className="flex flex-wrap gap-4 mb-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">From</label>

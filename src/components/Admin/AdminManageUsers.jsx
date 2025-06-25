@@ -2,39 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { databases } from '../../appwrite/config';
 import { CheckCircle, XCircle, Loader2, User as UserIcon, ChevronDown } from 'lucide-react';
 
-// Simple Modal component
-const ConfirmModal = ({ open, title, message, onConfirm, onCancel, loading }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
-        <h4 className="font-bold text-lg mb-2">{title}</h4>
-        <p className="mb-4 text-gray-700">{message}</p>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
-            ) : (
-              'Yes'
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const DB_ID = 'cargo-car-rental';
 const COLLECTION_ID = 'users';
 
@@ -50,12 +17,9 @@ const AdminManageUsers = () => {
   const [sortBy, setSortBy] = useState('firstName');
   const [sortDir, setSortDir] = useState('asc');
 
-  // Modal state
-  const [modal, setModal] = useState({
-    open: false,
-    user: null,
-    enable: null, // true = enable, false = disable
-  });
+  // Inline confirmation state
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [pendingStatus, setPendingStatus] = useState(null); // true/false for enable/disable
 
   useEffect(() => {
     fetchUsers();
@@ -73,49 +37,33 @@ const AdminManageUsers = () => {
     setLoading(false);
   };
 
-  const handleToggleStatus = async (user) => {
+  // Inline enable/disable handler (shows inline confirmation)
+  const handleToggleStatusInline = (user, enable) => {
+    setConfirmingId(user.$id);
+    setPendingStatus(enable);
+  };
+
+  // Inline confirm action
+  const handleInlineConfirm = async (user) => {
     setActionUserId(user.$id);
     setError('');
     try {
       await databases.updateDocument(DB_ID, COLLECTION_ID, user.$id, {
-        status: !(user.status === true || user.status === 1)
+        status: pendingStatus,
       });
       await fetchUsers();
     } catch (e) {
       setError('Failed to update user status');
     }
     setActionUserId(null);
+    setConfirmingId(null);
+    setPendingStatus(null);
   };
 
-  // Handler to open modal
-  const handleToggleStatusModal = (user) => {
-    setModal({
-      open: true,
-      user,
-      enable: !(user.status === true || user.status === 1),
-    });
-  };
-
-  // Modal confirm action
-  const handleModalConfirm = async () => {
-    if (!modal.user) return;
-    setActionUserId(modal.user.$id);
-    setError('');
-    try {
-      await databases.updateDocument(DB_ID, COLLECTION_ID, modal.user.$id, {
-        status: modal.enable,
-      });
-      await fetchUsers();
-    } catch (e) {
-      setError('Failed to update user status');
-    }
-    setActionUserId(null);
-    setModal({ open: false, user: null, enable: null });
-  };
-
-  // Modal cancel action
-  const handleModalCancel = () => {
-    setModal({ open: false, user: null, enable: null });
+  // Inline cancel action
+  const handleInlineCancel = () => {
+    setConfirmingId(null);
+    setPendingStatus(null);
   };
 
   // New: filtered and sorted users
@@ -225,77 +173,102 @@ const AdminManageUsers = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map(user => (
-              <tr key={user.$id} className="border-b">
-                <td className="px-4 py-2">
-                  {user.profilePicUrl ? (
-                    <img
-                      src={user.profilePicUrl}
-                      alt="Profile"
-                      className="w-10 h-10 rounded-full object-cover border"
-                      onError={e => { e.target.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                      <UserIcon size={20} />
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {[user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')}
-                </td>
-                <td className="px-4 py-2">{user.emailAdd}</td>
-                <td className="px-4 py-2">
-                  {user.status === true || user.status === 1 ? (
-                    <span className="flex items-center text-green-600">
-                      <CheckCircle size={16} className="mr-1" /> Enabled
-                    </span>
-                  ) : (
-                    <span className="flex items-center text-red-600">
-                      <XCircle size={16} className="mr-1" /> Disabled
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <button
-                    className={`px-3 py-1 rounded text-white ${user.status === true || user.status === 1 ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} transition`}
-                    onClick={() => handleToggleStatusModal(user)}
-                    disabled={actionUserId === user.$id}
-                  >
-                    {actionUserId === user.$id ? (
-                      <Loader2 className="animate-spin h-4 w-4" />
-                    ) : user.status === true || user.status === 1 ? 'Disable' : 'Enable'}
-                  </button>
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center py-8 text-gray-500">
+                  No users found.
                 </td>
               </tr>
-            ))}
+            ) : (
+              filteredUsers.flatMap(user => {
+                const userRow = (
+                  <tr key={user.$id} className="border-b">
+                    <td className="px-4 py-2">
+                      {user.profilePicUrl ? (
+                        <img
+                          src={user.profilePicUrl}
+                          alt="Profile"
+                          className="w-10 h-10 rounded-full object-cover border"
+                          onError={e => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                          <UserIcon size={20} />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {[user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ')}
+                    </td>
+                    <td className="px-4 py-2">{user.emailAdd}</td>
+                    <td className="px-4 py-2">
+                      {user.status === true || user.status === 1 ? (
+                        <span className="flex items-center text-green-600">
+                          <CheckCircle size={16} className="mr-1" /> Enabled
+                        </span>
+                      ) : (
+                        <span className="flex items-center text-red-600">
+                          <XCircle size={16} className="mr-1" /> Disabled
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        className={`px-3 py-1 rounded text-white ${user.status === true || user.status === 1 ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} transition`}
+                        onClick={() => handleToggleStatusInline(user, !(user.status === true || user.status === 1))}
+                        disabled={actionUserId === user.$id}
+                      >
+                        {actionUserId === user.$id ? (
+                          <Loader2 className="animate-spin h-4 w-4" />
+                        ) : user.status === true || user.status === 1 ? 'Disable' : 'Enable'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+                // Inline confirmation row
+                const confirmRow = confirmingId === user.$id ? (
+                  <tr key={user.$id + '-confirm'}>
+                    <td colSpan={5} className={`border-b px-4 py-4 ${pendingStatus ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <span className={`font-semibold ${pendingStatus ? 'text-green-900' : 'text-red-900'}`}>
+                          {pendingStatus
+                            ? 'Are you sure you want to ENABLE this user?'
+                            : 'Are you sure you want to DISABLE this user?'}
+                        </span>
+                        <div className="flex gap-2 mt-2 md:mt-0">
+                          <button
+                            onClick={() => handleInlineConfirm(user)}
+                            disabled={actionUserId === user.$id}
+                            className={`px-4 py-2 rounded ${pendingStatus ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} text-white font-semibold disabled:opacity-50`}
+                          >
+                            {actionUserId === user.$id ? (
+                              <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
+                            ) : (
+                              'Yes'
+                            )}
+                          </button>
+                          <button
+                            onClick={handleInlineCancel}
+                            disabled={actionUserId === user.$id}
+                            className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null;
+                return confirmRow ? [userRow, confirmRow] : [userRow];
+              })
+            )}
           </tbody>
         </table>
       )}
-
-      {/* Modal for confirmation */}
-      <ConfirmModal
-        open={modal.open}
-        title={
-          modal.enable === true
-            ? 'Enable User'
-            : modal.enable === false
-            ? 'Disable User'
-            : ''
-        }
-        message={
-          modal.enable === true
-            ? 'Are you sure you want to ENABLE this user?'
-            : modal.enable === false
-            ? 'Are you sure you want to DISABLE this user?'
-            : ''
-        }
-        onConfirm={handleModalConfirm}
-        onCancel={handleModalCancel}
-        loading={actionUserId === (modal.user && modal.user.$id)}
-      />
+      {/* Remove modal for confirmation, now handled inline */}
     </div>
   );
 };
 
 export default AdminManageUsers;
+     
