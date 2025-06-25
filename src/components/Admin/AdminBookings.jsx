@@ -145,10 +145,14 @@ const AdminBookings = () => {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
 
-  // Modal state
+  // Inline confirmation state
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [cancellingInlineId, setCancellingInlineId] = useState(null); // NEW: inline cancel state
+
+  // Add modal state for cancellation modal
   const [modal, setModal] = useState({
     open: false,
-    action: null, // 'confirm' | 'cancel'
+    action: null,
     bookingId: null,
   });
 
@@ -169,68 +173,63 @@ const AdminBookings = () => {
     }
   };
 
-  // Confirm booking handler (opens modal)
+  // Confirm booking handler (shows inline confirmation)
   const handleConfirmBooking = (bookingId) => {
-    setModal({
-      open: true,
-      action: 'confirm',
-      bookingId,
-    });
+    setConfirmingId(bookingId);
+    setCancellingInlineId(null);
   };
 
-  // Cancel booking handler (opens modal)
+  // Cancel booking handler (shows inline cancel confirmation)
   const handleCancelBooking = (bookingId) => {
-    setModal({
-      open: true,
-      action: 'cancel',
-      bookingId,
-    });
+    setCancellingInlineId(bookingId);
+    setConfirmingId(null);
   };
 
-  // Modal confirm action
-  const handleModalConfirm = async () => {
-    if (!modal.bookingId) return;
-    if (modal.action === 'confirm') {
-      setUpdatingId(modal.bookingId);
-      setError('');
-      try {
-        await databases.updateDocument(
-          'cargo-car-rental',
-          'bookings',
-          modal.bookingId,
-          { status: 'confirmed', updatedAt: new Date().toISOString() }
-        );
-        // Refresh bookings
-        await loadBookings();
-      } catch (err) {
-        setError('Failed to confirm booking: ' + (err.message || err));
-      } finally {
-        setUpdatingId(null);
-        setModal({ open: false, action: null, bookingId: null });
-      }
-    } else if (modal.action === 'cancel') {
-      setCancellingId(modal.bookingId);
-      setError('');
-      try {
-        await databases.updateDocument(
-          'cargo-car-rental',
-          'bookings',
-          modal.bookingId,
-          { status: 'cancelled', updatedAt: new Date().toISOString() }
-        );
-        await loadBookings();
-      } catch (err) {
-        setError('Failed to cancel booking: ' + (err.message || err));
-      } finally {
-        setCancellingId(null);
-        setModal({ open: false, action: null, bookingId: null });
-      }
+  // Inline confirm action
+  const handleInlineConfirm = async (bookingId) => {
+    setUpdatingId(bookingId);
+    setError('');
+    try {
+      await databases.updateDocument(
+        'cargo-car-rental',
+        'bookings',
+        bookingId,
+        { status: 'confirmed', updatedAt: new Date().toISOString() }
+      );
+      // Refresh bookings
+      await loadBookings();
+    } catch (err) {
+      setError('Failed to confirm booking: ' + (err.message || err));
+    } finally {
+      setUpdatingId(null);
+      setConfirmingId(null);
     }
   };
 
-  // Modal cancel action
-  const handleModalCancel = () => {
-    setModal({ open: false, action: null, bookingId: null });
+  // Inline cancel action (just hide the inline confirmation)
+  const handleInlineCancel = () => {
+    setConfirmingId(null);
+    setCancellingInlineId(null);
+  };
+
+  // Inline cancel confirm action (actually cancel the booking)
+  const handleInlineCancelConfirm = async (bookingId) => {
+    setCancellingId(bookingId);
+    setError('');
+    try {
+      await databases.updateDocument(
+        'cargo-car-rental',
+        'bookings',
+        bookingId,
+        { status: 'cancelled', updatedAt: new Date().toISOString() }
+      );
+      await loadBookings();
+    } catch (err) {
+      setError('Failed to cancel booking: ' + (err.message || err));
+    } finally {
+      setCancellingId(null);
+      setCancellingInlineId(null);
+    }
   };
 
   // New: filtered and sorted bookings
@@ -370,9 +369,9 @@ const AdminBookings = () => {
                   </td>
                 </tr>
               ) : (
-                filteredBookings.map((booking) => {
+                filteredBookings.flatMap((booking) => {
                   const paymentFieldId = booking.paymentFieldId;
-                  return (
+                  const bookingRow = (
                     <tr key={booking.$id} className="hover:bg-gray-50">
                       <td className="px-4 py-2 border-b">{booking.$id}</td>
                       <td className="px-4 py-2 border-b">
@@ -440,33 +439,83 @@ const AdminBookings = () => {
                       </td>
                     </tr>
                   );
+                  // Inline confirmation row for confirm
+                  const confirmRow = confirmingId === booking.$id ? (
+                    <tr key={booking.$id + '-confirm'}>
+                      <td colSpan={10} className="bg-yellow-50 border-b px-4 py-4">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <span className="font-semibold text-yellow-900">
+                            Have you reviewed the booking details?
+                          </span>
+                          <div className="flex gap-2 mt-2 md:mt-0">
+                            <button
+                              onClick={() => handleInlineConfirm(booking.$id)}
+                              disabled={updatingId === booking.$id}
+                              className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50"
+                            >
+                              {updatingId === booking.$id ? (
+                                <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
+                              ) : (
+                                'Yes'
+                              )}
+                            </button>
+                            <button
+                              onClick={handleInlineCancel}
+                              disabled={updatingId === booking.$id}
+                              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null;
+                  // Inline confirmation row for cancel
+                  const cancelRow = cancellingInlineId === booking.$id ? (
+                    <tr key={booking.$id + '-cancel'}>
+                      <td colSpan={10} className="bg-red-50 border-b px-4 py-4">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <span className="font-semibold text-red-900">
+                            Are you sure you want to CANCEL this booking?
+                          </span>
+                          <div className="flex gap-2 mt-2 md:mt-0">
+                            <button
+                              onClick={() => handleInlineCancelConfirm(booking.$id)}
+                              disabled={cancellingId === booking.$id}
+                              className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50"
+                            >
+                              {cancellingId === booking.$id ? (
+                                <span className="animate-spin h-4 w-4 border-b-2 border-white rounded-full inline-block"></span>
+                              ) : (
+                                'Yes'
+                              )}
+                            </button>
+                            <button
+                              onClick={handleInlineCancel}
+                              disabled={cancellingId === booking.$id}
+                              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null;
+                  // Show confirmRow or cancelRow if active, otherwise just bookingRow
+                  return confirmRow
+                    ? [bookingRow, confirmRow]
+                    : cancelRow
+                    ? [bookingRow, cancelRow]
+                    : [bookingRow];
                 })
               )}
             </tbody>
           </table>
         </div>
       )}
-      {/* Modal for confirmation */}
-      <ConfirmModal
-        open={modal.open}
-        title={
-          modal.action === 'confirm'
-            ? 'Confirm Booking'
-            : modal.action === 'cancel'
-            ? 'Cancel Booking'
-            : ''
-        }
-        message={
-          modal.action === 'confirm'
-            ? 'Are you sure you want to CONFIRM this booking?'
-            : modal.action === 'cancel'
-            ? 'Are you sure you want to CANCEL this booking?'
-            : ''
-        }
-        onConfirm={handleModalConfirm}
-        onCancel={handleModalCancel}
-        loading={modal.action === 'confirm' ? updatingId === modal.bookingId : cancellingId === modal.bookingId}
-      />
+      {/* Remove modal for cancellation, now handled inline */}
     </div>
   );
 };
