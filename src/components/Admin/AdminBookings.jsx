@@ -103,8 +103,8 @@ const PaymentImage = ({ paymentFieldId }) => {
 const ConfirmModal = ({ open, title, message, onConfirm, onCancel, loading }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs pointer-events-auto">
         <h4 className="font-bold text-lg mb-2">{title}</h4>
         <p className="mb-4 text-gray-700">{message}</p>
         <div className="flex justify-end gap-2">

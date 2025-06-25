@@ -721,7 +721,7 @@ const BookingModal = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <MapPin size={16} className="inline mr-1" />
-                  Pickup Location *
+                  Route*
                 </label>
                 <input
                   type="text"
@@ -729,14 +729,14 @@ const BookingModal = ({
                   value={bookingData.pickupLocation}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter pickup address"
+                  placeholder="Enter route"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   <MapPin size={16} className="inline mr-1" />
-                  Destination *
+                  Destination*
                 </label>
                 <input
                   type="text"
@@ -744,7 +744,7 @@ const BookingModal = ({
                   value={bookingData.returnLocation}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter return address"
+                  placeholder="Enter destination"
                   required
                 />
               </div>
