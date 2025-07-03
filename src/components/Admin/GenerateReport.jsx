@@ -81,7 +81,7 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
     pdf.setFontSize(12);
     pdf.setTextColor(0, 0, 0);
     pdf.text(`Total Bookings: ${bookings.length}`, margin, y);
-    pdf.text(`Total Revenue: ${totalRevenue.toLocaleString()}`, margin + 200, y);
+    // Removed Total Revenue here
     y += 18;
 
     // Section line
@@ -142,6 +142,13 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
         pdf.setTextColor(0, 0, 0);
       }
     });
+
+    // Grand Total (above footer)
+    y = 540;
+    pdf.setFontSize(20);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Grand Total: ${totalRevenue.toLocaleString()}`, margin, y);
 
     // Footer
     y = 560;
@@ -213,6 +220,7 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
         queries
       );
       const bookings = res.documents;
+      const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalCost) || 0), 0);
       // PDF layout
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
       let y = 40;
@@ -254,7 +262,7 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
       pdf.setFontSize(12);
       pdf.setTextColor(0, 0, 0);
       pdf.text(`Total Bookings: ${bookings.length}`, margin, y);
-      pdf.text(`Total Revenue: ${totalRevenue.toLocaleString()}`, margin + 200, y);
+      // Removed Total Revenue here
       y += 18;
 
       // Section line
@@ -315,6 +323,13 @@ const GenerateReport = ({ generatedBy = 'Admin' }) => {
           pdf.setTextColor(0, 0, 0);
         }
       });
+
+      // Grand Total (above footer)
+      y = 540;
+      pdf.setFontSize(13);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(0, 0, 0);
+      pdf.text(`Grand Total: ${totalRevenue.toLocaleString()}`, margin, y);
 
       // Footer
       y = 560;
